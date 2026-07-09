@@ -1582,25 +1582,25 @@ Generated via Ultimate Wealth Calculator Pro.
                           name: "WhatsApp",
                           label: "Direct Chat",
                           icon: <MessageSquare size={18} />,
-                          link: "https://wa.me/919876543210",
+                          link: "https://wa.me/",
                         },
                         {
                           name: "Telegram",
                           label: "Developer Channel",
                           icon: <Send size={18} />,
-                          link: "https://t.me/YourTelegramUsername",
+                          link: "https://t.me/ssb100million",
                         },
                         {
                           name: "LinkedIn",
                           label: "Professional Profile",
                           icon: <Linkedin size={18} />,
-                          link: "https://www.linkedin.com/in/YourLinkedInUsername",
+                          link: "https://www.linkedin.com/in/",
                         },
                         {
                           name: "Twitter (X)",
                           label: "Financial Updates",
                           icon: <Twitter size={18} />,
-                          link: "https://twitter.com/YourTwitterUsername",
+                          link: "https://twitter.com/ghoshrahul4455",
                         },
                         {
                           name: "Website",
@@ -1612,7 +1612,7 @@ Generated via Ultimate Wealth Calculator Pro.
                           name: "Contact Email",
                           label: "Direct Inquiry",
                           icon: <Mail size={18} />,
-                          link: "mailto:you@example.com",
+                          link: "mailto:ghoshrahul4455@gmail.com",
                         },
                       ].map((plat) => (
                         <a

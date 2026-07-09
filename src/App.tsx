@@ -62,6 +62,27 @@ export default function App() {
   // Theme state: default to system preference or dark
   const [theme, setTheme] = useState<"dark" | "light">("dark");
 
+  // Font choice state: options: plus-jakarta (default), inter, roboto, poppins, merriweather, playfair
+  const [fontChoice, setFontChoice] = useState<string>(() => localStorage.getItem("wealthFont") || "plus-jakarta");
+
+  useEffect(() => {
+    const applyFont = (choice: string) => {
+      const mappings: { [k: string]: { sans?: string; serif?: string } } = {
+        "plus-jakarta": { sans: '"Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif', serif: '"Playfair Display", Georgia, serif' },
+        inter: { sans: '"Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans"', serif: '"Playfair Display", Georgia, serif' },
+        roboto: { sans: '"Roboto", ui-sans-serif, system-ui, -apple-system, "Segoe UI", "Helvetica Neue", Arial', serif: '"Playfair Display", Georgia, serif' },
+        poppins: { sans: '"Poppins", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Arial', serif: '"Playfair Display", Georgia, serif' },
+        merriweather: { sans: '"Roboto", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Arial', serif: '"Merriweather", Georgia, serif' },
+        playfair: { sans: '"Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif', serif: '"Playfair Display", Georgia, serif' },
+      };
+      const map = mappings[choice] || mappings["plus-jakarta"];
+      if (map.sans) document.documentElement.style.setProperty("--font-sans", map.sans);
+      if (map.serif) document.documentElement.style.setProperty("--font-serif", map.serif);
+    };
+    applyFont(fontChoice);
+    localStorage.setItem("wealthFont", fontChoice);
+  }, [fontChoice]);
+
   // Navigation tab state
   const [activeTab, setActiveTab] = useState<"dashboard" | "calculator" | "analytics" | "reports" | "developer" | "faq" | "inflation" | "compare" | "risk" | "tax" | "portfolio" | "goals">("dashboard");
 
@@ -369,6 +390,25 @@ Generated via Ultimate Wealth Calculator Pro.
                 {theme === "dark" ? <Sun size={15} className="text-emerald-400" /> : <Moon size={15} className="text-slate-600" />}
               </button>
             </div>
+
+            {/* Font selector */}
+            <div className="mt-3">
+              <label className="text-[10px] font-bold text-slate-400 dark:text-white/40 uppercase tracking-widest">Font</label>
+              <select
+                value={fontChoice}
+                onChange={(e) => setFontChoice(e.target.value)}
+                className="w-full mt-2 px-2 py-2 text-sm bg-white dark:bg-[#0b0b0b] border border-slate-200 dark:border-white/10 rounded-sm text-slate-700 dark:text-white/90"
+                aria-label="Select font for the UI"
+              >
+                <option value="plus-jakarta">Plus Jakarta Sans (Default)</option>
+                <option value="inter">Inter</option>
+                <option value="roboto">Roboto</option>
+                <option value="poppins">Poppins</option>
+                <option value="merriweather">Merriweather (Serif)</option>
+                <option value="playfair">Playfair Display (Serif)</option>
+              </select>
+            </div>
+
             <div className="text-[10px] text-slate-400/85 dark:text-white/30 leading-relaxed font-mono">
               <p>System Standard: v4.0</p>
               <p>Status: Cloud Active</p>

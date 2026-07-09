@@ -223,3 +223,114 @@ export function loadInputsFromLocalStorage(): CalculationInputs | null {
   }
   return null;
 }
+
+// Validation functions
+export function validateInputs(inputs: CalculationInputs): { isValid: boolean; errors: Array<{ field: string; message: string }> } {
+  const errors: Array<{ field: string; message: string }> = [];
+
+  if (inputs.investment < 0) {
+    errors.push({ field: "investment", message: "Initial investment cannot be negative" });
+  }
+  if (inputs.monthlyContribution < 0) {
+    errors.push({ field: "monthlyContribution", message: "Monthly contribution cannot be negative" });
+  }
+  if (inputs.targetAmount <= 0) {
+    errors.push({ field: "targetAmount", message: "Target amount must be greater than 0" });
+  }
+  if (inputs.monthlyRate < -20 || inputs.monthlyRate > 50) {
+    errors.push({ field: "monthlyRate", message: "Monthly rate should be between -20% and 50%" });
+  }
+  if (inputs.inflationRate && (inputs.inflationRate < -10 || inputs.inflationRate > 25)) {
+    errors.push({ field: "inflationRate", message: "Inflation rate should be between -10% and 25%" });
+  }
+  if (!inputs.startDate) {
+    errors.push({ field: "startDate", message: "Start date is required" });
+  }
+  if (!inputs.goalName || inputs.goalName.trim().length === 0) {
+    errors.push({ field: "goalName", message: "Goal name is required" });
+  }
+
+  return {
+    isValid: errors.length === 0,
+    errors,
+  };
+}
+
+// Export functions
+export function exportToCSV(results: CalculationResults, inputs: CalculationInputs): string {
+  const headers = ["Month", "Date", "Contributions", "Profit", "Balance", "Inflation-Adjusted Balance"];
+  const rows = results.projections.map((p) => [
+    p.month,
+    p.dateStr,
+    p.contributions.toFixed(2),
+    p.profit.toFixed(2),
+    p.balance.toFixed(2),
+    p.adjustedBalance.toFixed(2),
+  ]);
+
+  const csvContent = [
+    ["Goal Name:", inputs.goalName],
+    ["Initial Investment:", inputs.investment],
+    ["Monthly Contribution:", inputs.monthlyContribution],
+    ["Monthly Return Rate:", `${inputs.monthlyRate}%`],
+    ["Target Amount:", inputs.targetAmount],
+    [""],
+    headers,
+    ...rows,
+  ]
+    .map((row) => row.map((cell) => `"${cell}"`).join(","))
+    .join("\n");
+
+  return csvContent;
+}
+
+export function exportToJSON(results: CalculationResults, inputs: CalculationInputs): string {
+  return JSON.stringify(
+    {
+      inputs,
+      results,
+      exportDate: new Date().toISOString(),
+    },
+    null,
+    2
+  );
+}
+
+// Risk profile calculator
+export function calculateRiskProfile(answers: number[]): { score: number; level: "conservative" | "moderate" | "aggressive" } {
+  const avgScore = answers.reduce((a, b) => a + b, 0) / answers.length;
+  
+  let level: "conservative" | "moderate" | "aggressive" = "moderate";
+  if (avgScore < 4) level = "conservative";
+  else if (avgScore > 6) level = "aggressive";
+
+  return {
+    score: Math.round(avgScore * 16.67), // Convert to 0-100 scale
+    level,
+  };
+}
+
+// Copy to clipboard helper
+export async function copyToClipboard(text: string): Promise<boolean> {
+  try {
+    if (navigator.clipboard && window.isSecureContext) {
+      await navigator.clipboard.writeText(text);
+      return true;
+    } else {
+      const textArea = document.createElement("textarea");
+      textArea.value = text;
+      textArea.style.position = "fixed";
+      textArea.style.left = "-999999px";
+      document.body.appendChild(textArea);
+      textArea.focus();
+      textArea.select();
+      const success = document.execCommand("copy");
+      document.body.removeChild(textArea);
+      return success;
+    }
+  } catch (err) {
+    console.error("Failed to copy:", err);
+    return false;
+  }
+}
+

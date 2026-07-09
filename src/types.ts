@@ -9,6 +9,29 @@ export interface CalculationInputs {
   inflationRate?: number; // annual inflation rate
 }
 
+export interface ValidationError {
+  field: string;
+  message: string;
+}
+
+export interface InvestmentScenario {
+  id: string;
+  name: string;
+  inputs: CalculationInputs;
+  results?: CalculationResults;
+  createdAt: string;
+}
+
+export interface RiskProfile {
+  score: number; // 0-100
+  level: "conservative" | "moderate" | "aggressive";
+  allocation: {
+    bonds: number;
+    stocks: number;
+    cash: number;
+  };
+}
+
 export interface MonthlyProjection {
   month: number;
   dateStr: string;

@@ -28,6 +28,10 @@ import {
   Calculator,
   UserCheck,
   Award,
+  Copy,
+  AlertCircle,
+  BarChart3,
+  Target,
 } from "lucide-react";
 import { CalculationInputs, CalculationResults, CurrencyOption } from "./types";
 import {
@@ -39,6 +43,11 @@ import {
   formatPercent,
   saveInputsToLocalStorage,
   loadInputsFromLocalStorage,
+  validateInputs,
+  exportToCSV,
+  exportToJSON,
+  calculateRiskProfile,
+  copyToClipboard,
 } from "./utils/helpers";
 import AnalyticsChart from "./components/AnalyticsChart";
 
@@ -47,7 +56,16 @@ export default function App() {
   const [theme, setTheme] = useState<"dark" | "light">("dark");
 
   // Navigation tab state
-  const [activeTab, setActiveTab] = useState<"dashboard" | "calculator" | "analytics" | "reports" | "developer" | "faq" | "inflation">("dashboard");
+  const [activeTab, setActiveTab] = useState<"dashboard" | "calculator" | "analytics" | "reports" | "developer" | "faq" | "inflation" | "compare" | "risk">("dashboard");
+
+  // Copy to clipboard feedback
+  const [copyFeedback, setCopyFeedback] = useState<string | null>(null);
+
+  // Scenario comparison state
+  const [scenarios, setScenarios] = useState<Array<{ name: string; inputs: CalculationInputs; results: CalculationResults }>>([]);
+  
+  // Risk calculator state
+  const [riskAnswers, setRiskAnswers] = useState<number[]>([3, 3, 3, 3, 3]);
 
   // Inflation comparison states
   const [inflationCompareAmount, setInflationCompareAmount] = useState<number>(100000);
@@ -292,6 +310,8 @@ Generated via Ultimate Wealth Calculator Pro.
                 { id: "analytics", label: "Growth Analytics", icon: <Coins size={17} /> },
                 { id: "inflation", label: "Inflation Comparing", icon: <TrendingUp size={17} /> },
                 { id: "reports", label: "Rate Comparison", icon: <Scale size={17} /> },
+                { id: "compare", label: "Scenario Compare", icon: <BarChart3 size={17} /> },
+                { id: "risk", label: "Risk Calculator", icon: <Target size={17} /> },
                 { id: "faq", label: "Financial FAQ", icon: <CircleHelp size={17} /> },
                 { id: "developer", label: "Developer", icon: <UserCheck size={17} /> },
               ].map((item) => (
@@ -352,26 +372,55 @@ Generated via Ultimate Wealth Calculator Pro.
                 {activeTab === "analytics" && "Growth Projection Engine"}
                 {activeTab === "inflation" && "Historical & Future Inflation Comparing"}
                 {activeTab === "reports" && "Benchmark Comparatives"}
+                {activeTab === "compare" && "Scenario Comparison Tool"}
+                {activeTab === "risk" && "Risk Profile & Asset Allocation"}
                 {activeTab === "faq" && "Investment Intelligence"}
                 {activeTab === "developer" && "Developer Profile Panel"}
               </h2>
             </div>
 
             {/* Print and Share Toolbar buttons */}
-            <div className="flex items-center gap-3 w-full sm:w-auto">
+            <div className="flex items-center gap-3 w-full sm:w-auto flex-wrap justify-end">
               <button
                 onClick={handleCopyReport}
                 className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2.5 bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 hover:bg-slate-200 dark:hover:bg-white/10 text-slate-700 dark:text-white/90 text-xs font-semibold rounded-sm transition"
               >
-                <Share2 size={13} />
-                <span className="uppercase tracking-widest text-[10px]">{copied ? "Copied!" : "Copy Report"}</span>
+                <Copy size={13} />
+                <span className="uppercase tracking-widest text-[10px]">{copied ? "Copied!" : "Copy"}</span>
               </button>
+              {(activeTab === "dashboard" || activeTab === "analytics") && (
+                <>
+                  <button
+                    onClick={handleExportCSV}
+                    className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2.5 bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 hover:bg-slate-200 dark:hover:bg-white/10 text-slate-700 dark:text-white/90 text-xs font-semibold rounded-sm transition"
+                  >
+                    <Download size={13} />
+                    <span className="uppercase tracking-widest text-[10px]">CSV</span>
+                  </button>
+                  <button
+                    onClick={() => {
+                      const jsonContent = exportToJSON(results, inputs);
+                      const blob = new Blob([jsonContent], { type: "application/json" });
+                      const link = document.createElement("a");
+                      link.href = URL.createObjectURL(blob);
+                      link.download = `${inputs.goalName.replace(/\s+/g, "_")}_Wealth_Data.json`;
+                      document.body.appendChild(link);
+                      link.click();
+                      document.body.removeChild(link);
+                    }}
+                    className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2.5 bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 hover:bg-slate-200 dark:hover:bg-white/10 text-slate-700 dark:text-white/90 text-xs font-semibold rounded-sm transition"
+                  >
+                    <Download size={13} />
+                    <span className="uppercase tracking-widest text-[10px]">JSON</span>
+                  </button>
+                </>
+              )}
               <button
                 onClick={() => window.print()}
                 className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2.5 bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 hover:bg-slate-200 dark:hover:bg-white/10 text-slate-700 dark:text-white/90 text-xs font-semibold rounded-sm transition"
               >
                 <Printer size={13} />
-                <span className="uppercase tracking-widest text-[10px]">Print PDF</span>
+                <span className="uppercase tracking-widest text-[10px]">Print</span>
               </button>
             </div>
           </header>
@@ -1636,6 +1685,148 @@ Generated via Ultimate Wealth Calculator Pro.
                 )}
               </motion.div>
             </AnimatePresence>
+
+            {/* VIEW 7: SCENARIO COMPARISON */}
+            {activeTab === "compare" && (
+              <div className="bg-white dark:bg-[#0c0c0c] rounded-lg border border-slate-200 dark:border-white/10 p-6 lg:p-8 shadow-sm space-y-6">
+                <div className="space-y-4">
+                  <h3 className="text-lg font-serif italic text-slate-900 dark:text-white">Compare Multiple Scenarios</h3>
+                  <button
+                    onClick={() => {
+                      const newScenario = {
+                        name: `Scenario ${scenarios.length + 1}`,
+                        inputs: { ...inputs },
+                        results: results,
+                      };
+                      setScenarios([...scenarios, newScenario]);
+                    }}
+                    className="px-4 py-2.5 bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-semibold rounded transition"
+                  >
+                    + Add Current Scenario
+                  </button>
+                </div>
+
+                {scenarios.length === 0 ? (
+                  <div className="p-8 text-center bg-slate-50 dark:bg-white/[0.02] rounded border border-dashed border-slate-200 dark:border-white/10">
+                    <p className="text-slate-400 dark:text-white/50 text-sm">No scenarios added yet. Configure inputs and click "Add Current Scenario" to compare.</p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                    {scenarios.map((scenario, idx) => (
+                      <div key={idx} className="p-4 border border-slate-200 dark:border-white/10 rounded-lg bg-slate-50 dark:bg-white/[0.02]">
+                        <div className="flex justify-between items-start mb-3">
+                          <div>
+                            <h4 className="font-semibold text-slate-900 dark:text-white">{scenario.name}</h4>
+                            <p className="text-xs text-slate-500 dark:text-white/50">{scenario.inputs.goalName}</p>
+                          </div>
+                          <button
+                            onClick={() => setScenarios(scenarios.filter((_, i) => i !== idx))}
+                            className="text-red-500 hover:text-red-600 text-xs"
+                          >
+                            Remove
+                          </button>
+                        </div>
+                        <div className="space-y-2 text-xs">
+                          <p><strong>Target:</strong> {formatCurrency(scenario.inputs.targetAmount, scenario.inputs.currency)}</p>
+                          <p><strong>Monthly Rate:</strong> {scenario.inputs.monthlyRate}%</p>
+                          <p><strong>Time to Target:</strong> {scenario.results.yearsNeeded}y {scenario.results.remainingMonths}m</p>
+                          <p><strong>Final Amount:</strong> {formatCurrency(scenario.results.finalAmount, scenario.inputs.currency)}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* VIEW 8: RISK CALCULATOR */}
+            {activeTab === "risk" && (
+              <div className="bg-white dark:bg-[#0c0c0c] rounded-lg border border-slate-200 dark:border-white/10 p-6 lg:p-8 shadow-sm space-y-8">
+                <div className="max-w-2xl">
+                  <h3 className="text-lg font-serif italic text-slate-900 dark:text-white mb-6">Assess Your Risk Tolerance</h3>
+                  
+                  <div className="space-y-6">
+                    {[
+                      { q: "How many years until you need this money?", scale: "1-7" },
+                      { q: "How comfortable are you with market volatility?", scale: "1-7" },
+                      { q: "What's your income stability level?", scale: "1-7" },
+                      { q: "How much emergency fund do you have (months)?", scale: "1-7" },
+                      { q: "Your investing experience level?", scale: "1-7" },
+                    ].map((item, i) => (
+                      <div key={i} className="space-y-3">
+                        <label className="text-sm font-semibold text-slate-900 dark:text-white">{item.q}</label>
+                        <div className="flex gap-2">
+                          {[1, 2, 3, 4, 5, 6, 7].map((score) => (
+                            <button
+                              key={score}
+                              onClick={() => {
+                                const newAnswers = [...riskAnswers];
+                                newAnswers[i] = score;
+                                setRiskAnswers(newAnswers);
+                              }}
+                              className={`w-10 h-10 rounded text-xs font-bold transition ${
+                                riskAnswers[i] === score
+                                  ? "bg-emerald-500 text-white"
+                                  : "bg-slate-200 dark:bg-white/10 text-slate-700 dark:text-white/70 hover:bg-slate-300 dark:hover:bg-white/20"
+                              }`}
+                            >
+                              {score}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {riskAnswers.some((a) => a !== 0) && (
+                    <div className="mt-8 p-6 bg-gradient-to-r from-emerald-50 to-teal-50 dark:from-emerald-950/30 dark:to-teal-950/30 border border-emerald-200 dark:border-emerald-800/50 rounded-lg">
+                      {(() => {
+                        const profile = calculateRiskProfile(riskAnswers);
+                        return (
+                          <>
+                            <h4 className="font-bold text-slate-900 dark:text-white mb-4">Your Risk Profile</h4>
+                            <div className="space-y-4">
+                              <div>
+                                <p className="text-sm text-slate-600 dark:text-white/70 mb-2">Risk Score: {profile.score}/100</p>
+                                <div className="h-2 bg-slate-200 dark:bg-white/10 rounded-full overflow-hidden">
+                                  <div
+                                    className={`h-full transition-all ${
+                                      profile.level === "conservative"
+                                        ? "bg-blue-500"
+                                        : profile.level === "moderate"
+                                        ? "bg-yellow-500"
+                                        : "bg-red-500"
+                                    }`}
+                                    style={{ width: `${profile.score}%` }}
+                                  />
+                                </div>
+                              </div>
+                              <p className="text-sm font-semibold text-slate-900 dark:text-white capitalize">
+                                Profile: {profile.level}
+                              </p>
+                              <div className="grid grid-cols-3 gap-3 text-sm">
+                                <div className="p-3 bg-blue-100 dark:bg-blue-900/30 rounded text-center">
+                                  <p className="font-bold text-blue-900 dark:text-blue-300">30%</p>
+                                  <p className="text-xs text-blue-700 dark:text-blue-400">Bonds</p>
+                                </div>
+                                <div className="p-3 bg-amber-100 dark:bg-amber-900/30 rounded text-center">
+                                  <p className="font-bold text-amber-900 dark:text-amber-300">50%</p>
+                                  <p className="text-xs text-amber-700 dark:text-amber-400">Stocks</p>
+                                </div>
+                                <div className="p-3 bg-green-100 dark:bg-green-900/30 rounded text-center">
+                                  <p className="font-bold text-green-900 dark:text-green-300">20%</p>
+                                  <p className="text-xs text-green-700 dark:text-green-400">Cash</p>
+                                </div>
+                              </div>
+                            </div>
+                          </>
+                        );
+                      })()}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
 
             {/* General Policy Disclaimer Card */}
             <footer className="p-5 bg-amber-500/5 dark:bg-amber-500/5 rounded border border-amber-500/20 flex gap-3 text-[11px] text-slate-500 dark:text-white/50 leading-relaxed font-sans">

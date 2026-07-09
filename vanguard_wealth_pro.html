@@ -1,0 +1,1924 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Vanguard Wealth Pro — Standalone Edition</title>
+  
+  <!-- Preconnect & Load Elegant Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- Tailwind Config Customizations -->
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+            serif: ['Playfair Display', 'Georgia', 'serif'],
+            mono: ['JetBrains Mono', 'monospace'],
+          }
+        }
+      }
+    }
+  </script>
+
+  <!-- React 18, React-DOM 18, and Babel Standalone for direct in-browser JSX parsing -->
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+  <!-- Style block for Custom Scrollbars & Print-Ready Styles -->
+  <style>
+    /* Custom thin scrollbar for dashboard container */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    .dark ::-webkit-scrollbar-thumb {
+      background: rgba(16, 185, 129, 0.15);
+      border-radius: 4px;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: rgba(16, 185, 129, 0.3);
+      border-radius: 4px;
+    }
+    .dark ::-webkit-scrollbar-thumb:hover {
+      background: rgba(16, 185, 129, 0.3);
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: rgba(16, 185, 129, 0.5);
+    }
+
+    /* Print styling rules */
+    @media print {
+      body {
+        background-color: #ffffff !important;
+        color: #000000 !important;
+      }
+      aside, header, footer, button, select, input, .no-print {
+        display: none !important;
+      }
+      main {
+        width: 100% !important;
+        padding: 0 !important;
+        margin: 0 !important;
+      }
+      .print-full {
+        width: 100% !important;
+        max-width: 100% !important;
+        border: none !important;
+        box-shadow: none !important;
+        padding: 0 !important;
+      }
+    }
+  </style>
+</head>
+<body class="bg-slate-50 dark:bg-[#0a0a0a] text-slate-900 dark:text-[#f5f5f5] transition-colors duration-300 min-h-screen">
+
+  <div id="root"></div>
+
+  <!-- React Babel script block -->
+  <script type="text/babel">
+    const { useState, useEffect, useRef } = React;
+
+    // Currency configuration & options
+    const CURRENCIES = [
+      { code: "INR", locale: "en-IN", symbol: "₹", name: "Indian Rupee", flag: "🇮🇳" },
+      { code: "USD", locale: "en-US", symbol: "$", name: "US Dollar", flag: "🇺🇸" },
+      { code: "EUR", locale: "de-DE", symbol: "€", name: "Euro", flag: "🇪🇺" },
+      { code: "GBP", locale: "en-GB", symbol: "£", name: "British Pound", flag: "🇬🇧" },
+      { code: "AUD", locale: "en-AU", symbol: "A$", name: "Australian Dollar", flag: "🇦🇺" },
+      { code: "CAD", locale: "en-CA", symbol: "C$", name: "Canadian Dollar", flag: "🇨🇦" },
+      { code: "AED", locale: "ar-AE", symbol: "د.إ", name: "UAE Dirham", flag: "🇦🇪" },
+      { code: "SGD", locale: "en-SG", symbol: "S$", name: "Singapore Dollar", flag: "🇸🇬" }
+    ];
+
+    function getCurrencyConfig(code) {
+      return CURRENCIES.find((c) => c.code === code) || CURRENCIES[0];
+    }
+
+    function formatCurrency(amount, currencyCode) {
+      const config = getCurrencyConfig(currencyCode);
+      try {
+        return new Intl.NumberFormat(config.locale, {
+          style: "currency",
+          currency: config.code,
+          maximumFractionDigits: 0,
+        }).format(amount);
+      } catch (e) {
+        return `${config.symbol}${amount.toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
+      }
+    }
+
+    function getMonthYearString(startDateStr, monthsOffset) {
+      const date = startDateStr ? new Date(startDateStr) : new Date();
+      if (isNaN(date.getTime())) {
+        return "";
+      }
+      date.setMonth(date.getMonth() + monthsOffset);
+      return date.toLocaleDateString(undefined, { month: "short", year: "numeric" });
+    }
+
+    // Calculations Projection Algorithm
+    function calculateWealthProjection(inputs) {
+      const { investment, monthlyContribution, targetAmount, monthlyRate, startDate } = inputs;
+      const r = monthlyRate / 100;
+      let balance = investment;
+      let totalContributions = investment;
+      let months = 0;
+      const projections = [];
+
+      // Add starting point projection
+      projections.push({
+        month: 0,
+        dateStr: getMonthYearString(startDate, 0),
+        contributions: investment,
+        profit: 0,
+        balance: investment,
+      });
+
+      const maxMonths = 3600; // 300 years maximum limit
+
+      while (balance < targetAmount && months < maxMonths) {
+        months++;
+        const interest = balance * r;
+        balance = balance + interest + monthlyContribution;
+        totalContributions += monthlyContribution;
+        const profit = balance - totalContributions;
+
+        projections.push({
+          month: months,
+          dateStr: getMonthYearString(startDate, months),
+          contributions: totalContributions,
+          profit: Math.max(0, profit),
+          balance: balance,
+        });
+
+        // Safe break to avoid infinite loop on negative/zero rates and contributions
+        if (r <= 0 && monthlyContribution <= 0 && balance < targetAmount) {
+          break;
+        }
+      }
+
+      const finalAmount = balance;
+      const totalProfit = Math.max(0, finalAmount - totalContributions);
+      const roi = totalContributions > 0 ? (totalProfit / totalContributions) * 100 : 0;
+      
+      const yearsNeeded = months / 12;
+      const cagr = yearsNeeded > 0 && investment > 0
+        ? (Math.pow(finalAmount / investment, 1 / yearsNeeded) - 1) * 100
+        : 0;
+
+      const wholeYears = Math.floor(months / 12);
+      const remainingMonths = months % 12;
+
+      const compDate = startDate ? new Date(startDate) : new Date();
+      compDate.setMonth(compDate.getMonth() + months);
+      const completionDate = compDate.toLocaleDateString(undefined, {
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+      });
+
+      return {
+        finalAmount,
+        totalContributions,
+        totalProfit,
+        roi,
+        cagr,
+        monthsNeeded: months,
+        yearsNeeded: wholeYears,
+        remainingMonths,
+        completionDate,
+        projections,
+      };
+    }
+
+    // SVG Pixel-perfect Icons wrapper
+    function Icon({ name, size = 16, className = "" }) {
+      const icons = {
+        download: <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>,
+        printer: <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect width="12" height="8" x="6" y="14"/></svg>,
+        share2: <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>,
+        filewarning: <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>,
+        slidershorizontal: <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><line x1="21" y1="4" x2="14" y2="4"/><line x1="10" y1="4" x2="3" y2="4"/><line x1="21" y1="12" x2="12" y2="12"/><line x1="8" y1="12" x2="3" y2="12"/><line x1="21" y1="20" x2="16" y2="20"/><line x1="12" y1="20" x2="3" y2="20"/><line x1="14" y1="2" x2="14" y2="6"/><line x1="8" y1="10" x2="8" y2="14"/><line x1="16" y1="18" x2="16" y2="22"/></svg>,
+        calendar: <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><rect width="18" height="18" x="3" y="4" rx="2" ry="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/></svg>,
+        award: <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><circle cx="12" cy="8" r="7"/><polyline points="8.21 13.89 7 23 12 20 17 23 15.79 13.88"/></svg>,
+        checkcircle: <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>,
+        messagesquare: <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>,
+        linkedin: <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-2-2 2 2 0 0 0-2 2v7h-4v-7a6 6 0 0 1 6-6z"/><rect width="4" height="12" x="2" y="9"/><circle cx="4" cy="4" r="2"/></svg>,
+        twitter: <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M22 4s-.7 2.1-2 3.4c1.6 10-9.4 17.3-18 11.6 2.2.1 4.4-.6 6-2C3 15.5.5 9.6 3 5c2.2 2.6 5.6 4.1 9 4-.9-4.2 4-6.6 7-3.8 1.1 0 3-1.2 3-1.2z"/></svg>,
+        globe: <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><circle cx="12" cy="12" r="10"/><line x1="2" x2="22" y1="12" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>,
+        mail: <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>,
+        trendingup: <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg>,
+        calculator: <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><rect width="16" height="20" x="4" y="2" rx="2"/><line x1="8" x2="16" y1="6" y2="6"/><line x1="16" x2="16" y1="14" y2="18"/><path d="M16 10h.01"/><path d="M12 10h.01"/><path d="M8 10h.01"/><path d="M12 14h.01"/><path d="M8 14h.01"/><path d="M12 18h.01"/><path d="M8 18h.01"/></svg>,
+        linechart: <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg>,
+        barchart3: <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><line x1="18" x2="18" y1="20" y2="10"/><line x1="12" x2="12" y1="20" y2="4"/><line x1="6" x2="6" y1="20" y2="14"/></svg>,
+        helpcircle: <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" x2="12" y1="17" y2="17"/></svg>,
+        user: <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>,
+        moon: <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>,
+        sun: <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="M4.93 4.93l1.41 1.41"/><path d="M17.66 17.66l1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="M6.34 17.66l-1.41 1.41"/><path d="M19.07 4.93l-1.41 1.41"/></svg>,
+        scale: <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="m16 16 3-8 3 8c-.87.74-1.92 1-3 1s-2.13-.26-3-1Z"/><path d="m2 16 3-8 3 8c-.87.74-1.92 1-3 1s-2.13-.26-3-1Z"/><path d="M7 21h10"/><path d="M12 3v18"/><path d="M3 7h18"/></svg>,
+        send: <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+      };
+      return icons[name.toLowerCase()] || null;
+    }
+
+    // Dynamic, responsive SVG Chart
+    function AnalyticsChart({ projections, currency }) {
+      const [hoverIndex, setHoverIndex] = useState(null);
+      const [tooltipPos, setTooltipPos] = useState({ x: 0, y: 0 });
+      const containerRef = useRef(null);
+      const [dimensions, setDimensions] = useState({ width: 600, height: 320 });
+
+      useEffect(() => {
+        if (!containerRef.current) return;
+        const resizeObserver = new ResizeObserver((entries) => {
+          for (let entry of entries) {
+            const { width, height } = entry.contentRect;
+            setDimensions({
+              width: Math.max(width, 300),
+              height: Math.max(height, 260),
+            });
+          }
+        });
+        resizeObserver.observe(containerRef.current);
+        return () => resizeObserver.disconnect();
+      }, []);
+
+      if (!projections || projections.length === 0) {
+        return (
+          <div className="flex items-center justify-center h-64 border-2 border-dashed border-slate-700 rounded-2xl bg-slate-900/40 text-slate-400">
+            No projection data available
+          </div>
+        );
+      }
+
+      // Downsample to max 60 points for lightweight plotting
+      const maxPoints = 60;
+      const step = Math.max(1, Math.floor(projections.length / maxPoints));
+      const points = [];
+      for (let i = 0; i < projections.length; i += step) {
+        points.push(projections[i]);
+      }
+      if (projections.length > 1 && (projections.length - 1) % step !== 0) {
+        points.push(projections[projections.length - 1]);
+      }
+
+      const padding = { top: 20, right: 20, bottom: 40, left: 75 };
+      const graphWidth = dimensions.width - padding.left - padding.right;
+      const graphHeight = dimensions.height - padding.top - padding.bottom;
+
+      const maxBalance = Math.max(...points.map((p) => p.balance), 100);
+      const minBalance = 0;
+      const yRange = maxBalance - minBalance;
+
+      const getX = (index) => {
+        if (points.length <= 1) return padding.left;
+        return padding.left + (index / (points.length - 1)) * graphWidth;
+      };
+
+      const getY = (val) => {
+        return padding.top + graphHeight - ((val - minBalance) / yRange) * graphHeight;
+      };
+
+      const balancePoints = points.map((p, idx) => `${getX(idx)},${getY(p.balance)}`);
+      const balancePath = `M ${balancePoints.join(" L ")}`;
+
+      const balanceAreaPath = points.length > 0
+        ? `${balancePath} L ${getX(points.length - 1)},${padding.top + graphHeight} L ${getX(0)},${padding.top + graphHeight} Z`
+        : "";
+
+      const contrPoints = points.map((p, idx) => `${getX(idx)},${getY(p.contributions)}`);
+      const contrPath = `M ${contrPoints.join(" L ")}`;
+
+      const handleMouseMove = (e) => {
+        if (!containerRef.current) return;
+        const rect = e.currentTarget.getBoundingClientRect();
+        const x = e.clientX - rect.left - padding.left;
+
+        if (x < 0 || x > graphWidth) {
+          setHoverIndex(null);
+          return;
+        }
+
+        const pct = x / graphWidth;
+        const idx = Math.min(
+          points.length - 1,
+          Math.max(0, Math.round(pct * (points.length - 1)))
+        );
+
+        setHoverIndex(idx);
+        setTooltipPos({
+          x: getX(idx) + 12,
+          y: Math.min(getY(points[idx].balance) - 20, dimensions.height - 120),
+        });
+      };
+
+      const handleMouseLeave = () => {
+        setHoverIndex(null);
+      };
+
+      const yTicksCount = 5;
+      const yTicks = Array.from({ length: yTicksCount }, (_, i) => {
+        const val = minBalance + (yRange * i) / (yTicksCount - 1);
+        return { val, y: getY(val) };
+      });
+
+      const xTicksCount = Math.min(points.length, 5);
+      const xTicksIndices = Array.from({ length: xTicksCount }, (_, i) =>
+        Math.round((i * (points.length - 1)) / (xTicksCount - 1))
+      );
+
+      return (
+        <div ref={containerRef} className="w-full h-[320px] relative select-none">
+          <svg
+            width="100%"
+            height="100%"
+            viewBox={`0 0 ${dimensions.width} ${dimensions.height}`}
+            className="overflow-visible cursor-crosshair"
+            onMouseMove={handleMouseMove}
+            onMouseLeave={handleMouseLeave}
+          >
+            <defs>
+              <linearGradient id="balanceGrad" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="#10b981" stopOpacity="0.25" />
+                <stop offset="100%" stopColor="#10b981" stopOpacity="0.0" />
+              </linearGradient>
+              <linearGradient id="lineGrad" x1="0" y1="0" x2="1" y2="0">
+                <stop offset="0%" stopColor="#059669" />
+                <stop offset="100%" stopColor="#10b981" />
+              </linearGradient>
+            </defs>
+
+            {/* Grid lines */}
+            {yTicks.map((tick, i) => (
+              <g key={`y-grid-${i}`} className="opacity-10">
+                <line
+                  x1={padding.left}
+                  y1={tick.y}
+                  x2={dimensions.width - padding.right}
+                  y2={tick.y}
+                  stroke="currentColor"
+                  strokeWidth="1"
+                  strokeDasharray="4 4"
+                />
+                <text
+                  x={padding.left - 10}
+                  y={tick.y + 4}
+                  fill="currentColor"
+                  fontSize="11"
+                  className="font-mono text-slate-400 dark:text-white/40"
+                  textAnchor="end"
+                >
+                  {formatCurrency(tick.val, currency)}
+                </text>
+              </g>
+            ))}
+
+            {/* X Labels */}
+            {xTicksIndices.map((idx, i) => {
+              const pt = points[idx];
+              if (!pt) return null;
+              return (
+                <text
+                  key={`x-tick-${i}`}
+                  x={getX(idx)}
+                  y={dimensions.height - padding.bottom + 20}
+                  fill="currentColor"
+                  fontSize="11"
+                  className="font-sans text-slate-400 dark:text-white/40"
+                  textAnchor="middle"
+                >
+                  {pt.dateStr}
+                </text>
+              );
+            })}
+
+            {/* Shaded Area */}
+            <path d={balanceAreaPath} fill="url(#balanceGrad)" />
+
+            {/* Invested Capital Line */}
+            <path
+              d={contrPath}
+              fill="none"
+              stroke="#94a3b8"
+              strokeWidth="2"
+              strokeDasharray="5 5"
+              className="opacity-40"
+            />
+
+            {/* Compound Growth Balance Line */}
+            <path
+              d={balancePath}
+              fill="none"
+              stroke="url(#lineGrad)"
+              strokeWidth="3.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+
+            {/* Tooltip Dot and guides */}
+            {hoverIndex !== null && points[hoverIndex] && (
+              <g>
+                <line
+                  x1={getX(hoverIndex)}
+                  y1={padding.top}
+                  x2={getX(hoverIndex)}
+                  y2={dimensions.height - padding.bottom}
+                  stroke="#10b981"
+                  strokeWidth="1"
+                  className="opacity-40"
+                />
+                <circle
+                  cx={getX(hoverIndex)}
+                  cy={getY(points[hoverIndex].balance)}
+                  r="6"
+                  fill="#10b981"
+                  stroke="#ffffff"
+                  strokeWidth="2"
+                />
+                <circle
+                  cx={getX(hoverIndex)}
+                  cy={getY(points[hoverIndex].contributions)}
+                  r="4.5"
+                  fill="#94a3b8"
+                  stroke="#ffffff"
+                  strokeWidth="1.5"
+                />
+              </g>
+            )}
+          </svg>
+
+          {/* Interactive Tooltip Card */}
+          {hoverIndex !== null && points[hoverIndex] && (
+            <div
+              className="absolute z-20 bg-black/95 border border-white/10 rounded-xl p-3 shadow-2xl backdrop-blur-md pointer-events-none transition-all duration-75 text-xs text-white leading-relaxed font-sans"
+              style={{
+                left: `${tooltipPos.x}px`,
+                top: `${tooltipPos.y}px`,
+              }}
+            >
+              <p className="font-semibold text-emerald-400 mb-1.5 border-b border-white/5 pb-1 font-serif italic text-sm">
+                {points[hoverIndex].dateStr} (Month {points[hoverIndex].month})
+              </p>
+              <div className="flex justify-between gap-6 mb-1 font-mono">
+                <span className="text-white/60 font-sans">Portfolio Value:</span>
+                <span className="font-semibold text-emerald-400">
+                  {formatCurrency(points[hoverIndex].balance, currency)}
+                </span>
+              </div>
+              <div className="flex justify-between gap-6 mb-1 font-mono">
+                <span className="text-white/60 font-sans">Invested Capital:</span>
+                <span className="font-medium text-slate-300">
+                  {formatCurrency(points[hoverIndex].contributions, currency)}
+                </span>
+              </div>
+              <div className="flex justify-between gap-6 font-mono">
+                <span className="text-white/60 font-sans">Compounded Gain:</span>
+                <span className="font-medium text-emerald-300">
+                  {formatCurrency(points[hoverIndex].profit, currency)}
+                </span>
+              </div>
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    // MAIN APP ENTRY COMPONENT
+    function App() {
+      const [activeTab, setActiveTab] = useState("dashboard");
+      const [theme, setTheme] = useState("dark");
+      const [validationErrors, setValidationErrors] = useState({});
+      const [copied, setCopied] = useState(false);
+
+      // Inflation comparison states
+      const [inflationCompareAmount, setInflationCompareAmount] = useState(100000);
+      const [inflationCompareRate, setInflationCompareRate] = useState(3.0);
+      const [pastCompareYears, setPastCompareYears] = useState(25);
+      const [futureCompareYears, setFutureCompareYears] = useState(25);
+
+      // Default inputs state
+      const [inputs, setInputs] = useState({
+        investment: 10000,
+        monthlyContribution: 500,
+        targetAmount: 500000,
+        monthlyRate: 1.5,
+        currency: "USD",
+        startDate: new Date().toISOString().split("T")[0],
+        goalName: "Dream Home Fund",
+      });
+
+      // Load persistent theme/data from localStorage on mount
+      useEffect(() => {
+        const savedTheme = localStorage.getItem("wealthTheme");
+        if (savedTheme) {
+          setTheme(savedTheme);
+          document.documentElement.classList.toggle("light", savedTheme === "light");
+          document.documentElement.classList.toggle("dark", savedTheme === "dark");
+          document.body.classList.toggle("light", savedTheme === "light");
+          document.body.classList.toggle("dark", savedTheme === "dark");
+        } else {
+          document.documentElement.classList.add("dark");
+          document.body.classList.add("dark");
+        }
+
+        try {
+          const savedData = localStorage.getItem("wealth_calculator_inputs");
+          if (savedData) {
+            const parsed = JSON.parse(savedData);
+            if (typeof parsed.investment === "number" && typeof parsed.targetAmount === "number") {
+              setInputs(parsed);
+            }
+          }
+        } catch (e) {
+          console.error("Error reloading localStorage:", e);
+        }
+      }, []);
+
+      const handleToggleTheme = () => {
+        const nextTheme = theme === "dark" ? "light" : "dark";
+        setTheme(nextTheme);
+        localStorage.setItem("wealthTheme", nextTheme);
+        document.documentElement.classList.toggle("light", nextTheme === "light");
+        document.documentElement.classList.toggle("dark", nextTheme === "dark");
+        document.body.classList.toggle("light", nextTheme === "light");
+        document.body.classList.toggle("dark", nextTheme === "dark");
+      };
+
+      const handleInputChange = (field, value) => {
+        const nextInputs = { ...inputs, [field]: value };
+        setInputs(nextInputs);
+        try {
+          localStorage.setItem("wealth_calculator_inputs", JSON.stringify(nextInputs));
+        } catch (e) {
+          console.error(e);
+        }
+        validateField(field, value, nextInputs);
+      };
+
+      // Input Validation routine
+      const validateField = (field, value, allInputs) => {
+        const errors = { ...validationErrors };
+
+        if (field === "investment") {
+          const num = parseFloat(value);
+          if (isNaN(num) || num < 0) {
+            errors.investment = "Initial investment must be 0 or a positive number";
+          } else {
+            delete errors.investment;
+          }
+        }
+
+        if (field === "monthlyContribution") {
+          const num = parseFloat(value);
+          if (isNaN(num) || num < 0) {
+            errors.monthlyContribution = "Monthly contribution (SIP) must be 0 or positive";
+          } else {
+            delete errors.monthlyContribution;
+          }
+        }
+
+        if (field === "targetAmount") {
+          const num = parseFloat(value);
+          if (isNaN(num) || num <= 0) {
+            errors.targetAmount = "Target amount must be a positive number greater than 0";
+          } else if (num <= allInputs.investment) {
+            errors.targetAmount = "Target must be larger than your initial investment";
+          } else {
+            delete errors.targetAmount;
+          }
+        }
+
+        if (field === "monthlyRate") {
+          const num = parseFloat(value);
+          if (isNaN(num) || num < 0) {
+            errors.monthlyRate = "Monthly return rate must be 0 or positive";
+          } else if (num > 25) {
+            errors.monthlyRate = "Warning: 25%+ monthly return is extremely high and speculative";
+          } else {
+            delete errors.monthlyRate;
+          }
+        }
+
+        setValidationErrors(errors);
+      };
+
+      const results = calculateWealthProjection(inputs);
+
+      const handleReset = () => {
+        const defaultInputs = {
+          investment: 5000,
+          monthlyContribution: 250,
+          targetAmount: 100000,
+          monthlyRate: 1.2,
+          currency: "INR",
+          startDate: new Date().toISOString().split("T")[0],
+          goalName: "Future Wealth Fund",
+        };
+        setInputs(defaultInputs);
+        setValidationErrors({});
+        try {
+          localStorage.setItem("wealth_calculator_inputs", JSON.stringify(defaultInputs));
+        } catch (e) {
+          console.error(e);
+        }
+      };
+
+      const handleExportCSV = () => {
+        if (results.projections.length === 0) return;
+        const headers = ["Month", "Expected Date", "Total Invested Capital", "Compounded Profits", "Portfolio Balance"];
+        const rows = results.projections.map((p) => [
+          p.month,
+          p.dateStr,
+          p.contributions.toFixed(2),
+          p.profit.toFixed(2),
+          p.balance.toFixed(2),
+        ]);
+
+        const csvContent = "data:text/csv;charset=utf-8," + [headers.join(","), ...rows.map((e) => e.join(","))].join("\n");
+        const encodedUri = encodeURI(csvContent);
+        const link = document.createElement("a");
+        link.setAttribute("href", encodedUri);
+        link.setAttribute("download", `${inputs.goalName.replace(/\s+/g, "_")}_Wealth_Projection.csv`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      };
+
+      const handleCopyReport = () => {
+        const reportText = `
+--- ULTIMATE WEALTH PRO REPORT ---
+Goal Name: ${inputs.goalName}
+Initial Capital: ${formatCurrency(inputs.investment, inputs.currency)}
+Monthly Contribution: ${formatCurrency(inputs.monthlyContribution, inputs.currency)}/month
+Target wealth: ${formatCurrency(inputs.targetAmount, inputs.currency)}
+Monthly Return rate: ${inputs.monthlyRate}%
+--- RESULTS SUMMARY ---
+Target Status: Reached in ${results.monthsNeeded} Months (~${(results.monthsNeeded / 12).toFixed(1)} Years)
+Estimated Completion: ${results.completionDate}
+Total Capital Invested: ${formatCurrency(results.totalContributions, inputs.currency)}
+Earned Profits: ${formatCurrency(results.totalProfit, inputs.currency)}
+Ending Portfolio Value: ${formatCurrency(results.finalAmount, inputs.currency)}
+Compound ROI: ${results.roi.toFixed(1)}%
+Equivalent CAGR: ${results.cagr.toFixed(1)}%
+Generated via Ultimate Wealth Calculator Pro.
+        `.trim();
+
+        navigator.clipboard.writeText(reportText).then(() => {
+          setCopied(true);
+          setTimeout(() => setCopied(false), 2000);
+        });
+      };
+
+      const currentProgressPct = inputs.targetAmount > 0 ? (inputs.investment / inputs.targetAmount) * 100 : 0;
+      const milestone25Achieved = currentProgressPct >= 25;
+      const milestone50Achieved = currentProgressPct >= 50;
+      const milestone75Achieved = currentProgressPct >= 75;
+      const milestone100Achieved = currentProgressPct >= 100;
+
+      // Rates comparison matrix options (stateful to allow dynamic bracket selection and inline editing)
+      const [comparisonRates, setComparisonRates] = React.useState([1.0, 2.0, 3.0, 4.0, 5.0]);
+      const [activeBracket, setActiveBracket] = React.useState("1-5");
+
+      const rateBrackets = [
+        { id: "1-5", label: "1% – 5%", values: [1.0, 2.0, 3.0, 4.0, 5.0] },
+        { id: "6-10", label: "6% – 10%", values: [6.0, 7.0, 8.0, 9.0, 10.0] },
+        { id: "11-15", label: "11% – 15%", values: [11.0, 12.0, 13.0, 14.0, 15.0] },
+        { id: "16-20", label: "16% – 20%", values: [16.0, 17.0, 18.0, 19.0, 20.0] },
+        { id: "21-25", label: "21% – 25%", values: [21.0, 22.0, 23.0, 24.0, 25.0] },
+      ];
+
+      return (
+        <div class="flex flex-col lg:flex-row min-h-screen">
+          
+          {/* Navigation Sidebar */}
+          <aside className="w-full lg:w-72 bg-white dark:bg-[#0c0c0c] border-b lg:border-b-0 lg:border-r border-slate-200 dark:border-white/10 flex flex-col justify-between p-6 shrink-0 shadow-sm z-30 no-print">
+            <div>
+              <div className="flex items-center gap-3 mb-8">
+                <div className="w-9 h-9 bg-emerald-500 rounded-sm flex items-center justify-center font-bold text-black text-xs italic shadow-md">
+                  VA
+                </div>
+                <div>
+                  <h1 className="text-lg font-serif italic text-slate-900 dark:text-[#f5f5f5] tracking-tight">
+                    Vanguard Wealth Pro
+                  </h1>
+                  <p className="text-[9px] tracking-[0.18em] uppercase font-sans font-bold text-slate-400 dark:text-white/40">
+                    Standalone Formulation
+                  </p>
+                </div>
+              </div>
+
+              {/* Navigation Menu Links */}
+              <nav className="space-y-1.5">
+                {[
+                  { id: "dashboard", label: "Dashboard", icon: "trendingup" },
+                  { id: "calculator", label: "Calculators Setup", icon: "calculator" },
+                  { id: "analytics", label: "Growth Analytics", icon: "linechart" },
+                  { id: "inflation", label: "Inflation Comparing", icon: "scale" },
+                  { id: "reports", label: "Rate Comparison", icon: "barchart3" },
+                  { id: "faq", label: "Intelligence FAQs", icon: "helpcircle" },
+                  { id: "developer", label: "Developer Team", icon: "user" },
+                ].map((item) => {
+                  const isActive = activeTab === item.id;
+                  return (
+                    <button
+                      key={item.id}
+                      onClick={() => setActiveTab(item.id)}
+                      className={`w-full flex items-center gap-3 px-4 py-3 rounded-md text-xs font-semibold uppercase tracking-wider transition ${
+                        isActive
+                          ? "bg-slate-100 dark:bg-white/5 border-l-2 border-emerald-500 dark:border-l-emerald-400 text-slate-900 dark:text-emerald-400"
+                          : "text-slate-400 hover:text-slate-900 dark:hover:text-[#f5f5f5] hover:bg-slate-50 dark:hover:bg-white/[0.02]"
+                      }`}
+                    >
+                      <Icon name={item.icon} size={15} className={isActive ? "text-emerald-500" : "text-slate-400"} />
+                      <span>{item.label}</span>
+                    </button>
+                  );
+                })}
+              </nav>
+            </div>
+
+            {/* Sidebar Utility Bottom Panel */}
+            <div className="mt-8 pt-6 border-t border-slate-100 dark:border-white/5 space-y-4">
+              <button
+                onClick={handleToggleTheme}
+                className="w-full flex items-center justify-between px-4 py-2.5 bg-slate-50 dark:bg-black/30 hover:bg-slate-100 dark:hover:bg-white/5 border border-slate-200/50 dark:border-white/5 rounded text-xs font-semibold text-slate-600 dark:text-slate-300 transition"
+              >
+                <span className="uppercase tracking-widest text-[9px]">Interface Appearance</span>
+                <Icon name={theme === "dark" ? "sun" : "moon"} size={14} className="text-emerald-500" />
+              </button>
+
+              <div className="text-[10px] text-slate-400/80 dark:text-white/30 font-mono space-y-1 pl-4 leading-normal">
+                <p>System Standard: v4.0</p>
+                <p>Status: Local Standalone</p>
+              </div>
+            </div>
+          </aside>
+
+          {/* Primary Workspace Panel */}
+          <main className="flex-1 flex flex-col min-w-0">
+            
+            {/* Header Action Strip */}
+            <header className="bg-white/85 dark:bg-[#0f0f0f] backdrop-blur-md border-b border-slate-200 dark:border-white/10 px-6 lg:px-8 py-5 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 sticky top-0 z-20 shadow-sm no-print">
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] bg-slate-100 dark:bg-white/5 text-slate-800 dark:text-emerald-400 border border-slate-200 dark:border-white/10 font-mono font-bold px-2.5 py-0.5 rounded uppercase tracking-widest">
+                    Goal: {inputs.goalName || "Untitled"}
+                  </span>
+                </div>
+                <h2 className="text-lg lg:text-xl font-serif italic text-slate-950 dark:text-white tracking-tight mt-1.5">
+                  {activeTab === "dashboard" && "Portfolio Dashboard"}
+                  {activeTab === "calculator" && "Wealth Inputs Configuration"}
+                  {activeTab === "analytics" && "Growth Projection Engine"}
+                  {activeTab === "inflation" && "Historical & Future Inflation Comparing"}
+                  {activeTab === "reports" && "Benchmark Comparatives"}
+                  {activeTab === "faq" && "Investment Intelligence"}
+                  {activeTab === "developer" && "Developer Profile Panel"}
+                </h2>
+              </div>
+
+              {/* Print and Share Toolbar buttons */}
+              <div className="flex items-center gap-3 w-full sm:w-auto">
+                <button
+                  onClick={handleCopyReport}
+                  className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2.5 bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 hover:bg-slate-200 dark:hover:bg-white/10 text-slate-700 dark:text-white/90 text-xs font-semibold rounded-sm transition"
+                >
+                  <Icon name="share2" size={13} />
+                  <span className="uppercase tracking-widest text-[10px]">{copied ? "Copied!" : "Copy Report"}</span>
+                </button>
+                <button
+                  onClick={() => window.print()}
+                  className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2.5 bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 hover:bg-slate-200 dark:hover:bg-white/10 text-slate-700 dark:text-white/90 text-xs font-semibold rounded-sm transition"
+                >
+                  <Icon name="printer" size={13} />
+                  <span className="uppercase tracking-widest text-[10px]">Print PDF</span>
+                </button>
+              </div>
+            </header>
+
+            {/* Content Area */}
+            <div className="flex-1 p-6 lg:p-8 space-y-8 overflow-y-auto max-w-[1400px] w-full mx-auto print-full">
+              
+              {/* Quick Stats Panel Header on top of all sheets */}
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                <div className="bg-white dark:bg-white/[0.02] dark:border-white/5 border-l-2 border-emerald-500/30 dark:border-l-emerald-400 pl-5 border border-slate-200 p-5 rounded-lg shadow-sm flex flex-col justify-between">
+                  <span className="text-[10px] font-bold text-slate-400 dark:text-white/40 uppercase tracking-widest">
+                    Target Capital
+                  </span>
+                  <h3 className="text-lg lg:text-3xl font-serif tracking-tight text-slate-950 dark:text-[#f5f5f5] mt-1.5">
+                    {formatCurrency(inputs.targetAmount, inputs.currency)}
+                  </h3>
+                </div>
+                <div className="bg-white dark:bg-white/[0.02] dark:border-white/5 border-l-2 border-emerald-500/30 dark:border-l-emerald-400 pl-5 border border-slate-200 p-5 rounded-lg shadow-sm flex flex-col justify-between">
+                  <span className="text-[10px] font-bold text-slate-400 dark:text-white/40 uppercase tracking-widest">
+                    Initial Invested
+                  </span>
+                  <h3 className="text-lg lg:text-3xl font-serif tracking-tight text-slate-950 dark:text-[#f5f5f5] mt-1.5">
+                    {formatCurrency(inputs.investment, inputs.currency)}
+                  </h3>
+                </div>
+                <div className="bg-white dark:bg-white/[0.02] dark:border-white/5 border-l-2 border-emerald-500/30 dark:border-l-emerald-400 pl-5 border border-slate-200 p-5 rounded-lg shadow-sm flex flex-col justify-between">
+                  <span className="text-[10px] font-bold text-slate-400 dark:text-white/40 uppercase tracking-widest">
+                    Monthly Contribution
+                  </span>
+                  <h3 className="text-lg lg:text-3xl font-serif tracking-tight text-slate-950 dark:text-[#f5f5f5] mt-1.5">
+                    {formatCurrency(inputs.monthlyContribution, inputs.currency)}
+                  </h3>
+                </div>
+                <div className="bg-white dark:bg-white/[0.02] dark:border-white/5 border-l-2 border-emerald-500/30 dark:border-l-emerald-400 pl-5 border border-slate-200 p-5 rounded-lg shadow-sm flex flex-col justify-between">
+                  <span className="text-[10px] font-bold text-slate-400 dark:text-white/40 uppercase tracking-widest">
+                    Time Predicted
+                  </span>
+                  <h3 className="text-lg lg:text-3xl font-serif tracking-tight text-emerald-600 dark:text-emerald-400 mt-1.5">
+                    {results.monthsNeeded === 3600
+                      ? "unreachable"
+                      : `${results.yearsNeeded}y ${results.remainingMonths}m`}
+                  </h3>
+                </div>
+              </div>
+
+              {/* Error Panel if inputs are flawed */}
+              {Object.keys(validationErrors).length > 0 && (
+                <div className="p-4 rounded-xl bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-900/50 flex gap-3 text-xs text-rose-700 dark:text-rose-300">
+                  <Icon name="filewarning" size={18} className="shrink-0 text-rose-500 mt-0.5" />
+                  <div>
+                    <p className="font-bold mb-1">Please fix the input configuration issues:</p>
+                    <ul className="list-disc list-inside space-y-0.5">
+                      {Object.values(validationErrors).map((err, i) => (
+                        <li key={i}>{err}</li>
+                      ))}
+                    </ul>
+                  </div>
+                </div>
+              )}
+
+              {/* VIEW 1: DASHBOARD */}
+              {activeTab === "dashboard" && (
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                  
+                  {/* Left Column: Analytics Chart, Results Dashboard */}
+                  <div className="lg:col-span-2 space-y-8">
+                    
+                    {/* Interactive Realtime Summary Panel */}
+                    <div className="bg-white dark:bg-[#0c0c0c] rounded-lg border border-slate-200 dark:border-white/10 p-6 lg:p-8 shadow-sm space-y-6">
+                      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 pb-4 border-b border-slate-100 dark:border-white/5">
+                        <div>
+                          <h3 className="text-base font-serif italic text-slate-900 dark:text-[#f5f5f5]">
+                            Growth Target Trajectory
+                          </h3>
+                          <p className="text-xs text-slate-400 dark:text-white/40 mt-1">
+                            Target goal achievement trajectory with compounding calculations.
+                          </p>
+                        </div>
+                        <span className="text-[10px] bg-slate-100 dark:bg-white/5 text-slate-500 dark:text-white/60 font-mono uppercase tracking-wider px-3 py-1 rounded border border-slate-200/40 dark:border-white/5">
+                          Start Period: {inputs.startDate}
+                        </span>
+                      </div>
+
+                      {/* Chart Render */}
+                      <div className="bg-slate-50 dark:bg-[#080808] p-4 rounded border border-slate-100 dark:border-white/5">
+                        <AnalyticsChart projections={results.projections} currency={inputs.currency} />
+                      </div>
+
+                      {/* Summary breakdown row */}
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-center">
+                        <div className="p-4 bg-slate-50 dark:bg-white/[0.01] rounded border border-slate-200/50 dark:border-white/5">
+                          <span className="text-[9px] uppercase font-bold text-slate-400 dark:text-white/40 tracking-widest block">
+                            Final Forecast Val
+                          </span>
+                          <p className="text-lg lg:text-xl font-serif italic text-emerald-600 dark:text-emerald-400 mt-1.5">
+                            {formatCurrency(results.finalAmount, inputs.currency)}
+                          </p>
+                        </div>
+                        <div className="p-4 bg-slate-50 dark:bg-white/[0.01] rounded border border-slate-200/50 dark:border-white/5">
+                          <span className="text-[9px] uppercase font-bold text-slate-400 dark:text-white/40 tracking-widest block">
+                            Compounded Profits
+                          </span>
+                          <p className="text-lg lg:text-xl font-serif italic text-[#10b981] mt-1.5">
+                            {formatCurrency(results.totalProfit, inputs.currency)}
+                          </p>
+                        </div>
+                        <div className="p-4 bg-slate-50 dark:bg-white/[0.01] rounded border border-slate-200/50 dark:border-white/5">
+                          <span className="text-[9px] uppercase font-bold text-slate-400 dark:text-white/40 tracking-widest block">
+                            Absolute ROI / CAGR
+                          </span>
+                          <p className="text-lg lg:text-xl font-mono text-emerald-500 mt-1.5">
+                            {results.roi.toFixed(1)}% / {results.cagr.toFixed(1)}%
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Goal completion progress card */}
+                    <div className="bg-white dark:bg-[#0c0c0c] rounded-lg border border-slate-200 dark:border-white/10 p-6 lg:p-8 shadow-sm space-y-6">
+                      <div className="flex items-center gap-3">
+                        <div className="p-2 bg-emerald-100 dark:bg-emerald-950/20 text-emerald-600 dark:text-emerald-400 rounded">
+                          <Icon name="award" size={16} />
+                        </div>
+                        <h3 className="text-base font-serif italic text-slate-900 dark:text-white">
+                          Wealth Milestone Tracker
+                        </h3>
+                      </div>
+
+                      {/* Progress Bar */}
+                      <div className="space-y-2">
+                        <div className="flex justify-between text-xs">
+                          <span className="text-slate-400">Current Capital Ratio:</span>
+                          <span className="text-emerald-500 font-mono font-bold">{currentProgressPct.toFixed(1)}% achieved</span>
+                        </div>
+                        <div className="h-2 w-full bg-slate-100 dark:bg-white/5 rounded-full overflow-hidden border border-slate-200/50 dark:border-white/5">
+                          <div
+                            className="h-full bg-emerald-500 rounded-full transition-all duration-500"
+                            style={{ width: `${Math.min(currentProgressPct, 100)}%` }}
+                          />
+                        </div>
+                      </div>
+
+                      {/* Interactive Grid Milestones */}
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                        {[
+                          { value: 25, achieved: milestone25Achieved, label: "Starter (25%)" },
+                          { value: 50, achieved: milestone50Achieved, label: "Halfway (50%)" },
+                          { value: 75, achieved: milestone75Achieved, label: "Growth (75%)" },
+                          { value: 100, achieved: milestone100Achieved, label: "Complete (100%)" },
+                        ].map((milestone) => (
+                          <div
+                            key={milestone.value}
+                            className={`p-4 rounded border text-center transition ${
+                              milestone.achieved
+                                ? "bg-emerald-50/20 dark:bg-emerald-500/5 border-emerald-200 dark:border-emerald-500/20 text-slate-900 dark:text-[#f5f5f5]"
+                                : "bg-slate-50/50 dark:bg-white/[0.01] border-slate-100 dark:border-white/5 text-slate-400 dark:text-white/30"
+                            }`}
+                          >
+                            <Icon
+                              name="checkcircle"
+                              size={16}
+                              className={`mx-auto mb-2 ${milestone.achieved ? "text-emerald-500" : "text-slate-300 dark:text-white/10"}`}
+                            />
+                            <p className="text-[9px] font-extrabold uppercase tracking-widest">{milestone.label}</p>
+                            <p className="text-xs font-medium mt-1">
+                              {milestone.achieved ? "✅ Completed" : "⏳ Locked"}
+                            </p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Right Column: Calculator Inputs in brief */}
+                  <div className="space-y-8">
+                    
+                    {/* Configuration Card */}
+                    <div className="bg-white dark:bg-[#0c0c0c] rounded-lg border border-slate-200 dark:border-white/10 p-6 lg:p-8 shadow-sm space-y-6">
+                      <div className="pb-4 border-b border-slate-100 dark:border-white/5">
+                        <h3 className="text-base font-serif italic text-slate-900 dark:text-white flex items-center gap-2">
+                          <Icon name="slidershorizontal" size={16} className="text-emerald-500" />
+                          <span>Calculations Setup</span>
+                        </h3>
+                        <p className="text-xs text-slate-400 dark:text-white/40 mt-1">
+                          Modify real-time inputs or switch calculations.
+                        </p>
+                      </div>
+
+                      {/* Interactive Small Fields */}
+                      <div className="space-y-4">
+                        <div>
+                          <label className="block text-[10px] font-bold uppercase text-slate-400 dark:text-white/40 tracking-widest mb-1.5">
+                            Goal Name
+                          </label>
+                          <input
+                            type="text"
+                            value={inputs.goalName}
+                            onChange={(e) => handleInputChange("goalName", e.target.value)}
+                            className="w-full px-4 py-2.5 bg-slate-50 dark:bg-black/40 border border-slate-200 dark:border-white/10 rounded focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 text-sm outline-none transition text-slate-900 dark:text-[#f5f5f5]"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-[10px] font-bold uppercase text-slate-400 dark:text-white/40 tracking-widest mb-1.5">
+                            Initial Investment Sum
+                          </label>
+                          <input
+                            type="number"
+                            value={inputs.investment}
+                            onChange={(e) => handleInputChange("investment", parseFloat(e.target.value) || 0)}
+                            className="w-full px-4 py-2.5 bg-slate-50 dark:bg-black/40 border border-slate-200 dark:border-white/10 rounded focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 text-sm outline-none transition text-slate-900 dark:text-[#f5f5f5]"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-[10px] font-bold uppercase text-slate-400 dark:text-white/40 tracking-widest mb-1.5">
+                            Monthly Contribution (SIP)
+                          </label>
+                          <input
+                            type="number"
+                            value={inputs.monthlyContribution}
+                            onChange={(e) => handleInputChange("monthlyContribution", parseFloat(e.target.value) || 0)}
+                            className="w-full px-4 py-2.5 bg-slate-50 dark:bg-black/40 border border-slate-200 dark:border-white/10 rounded focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 text-sm outline-none transition text-slate-900 dark:text-[#f5f5f5]"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-[10px] font-bold uppercase text-slate-400 dark:text-white/40 tracking-widest mb-1.5">
+                            Target Wealth Limit
+                          </label>
+                          <input
+                            type="number"
+                            value={inputs.targetAmount}
+                            onChange={(e) => handleInputChange("targetAmount", parseFloat(e.target.value) || 0)}
+                            className="w-full px-4 py-2.5 bg-slate-50 dark:bg-black/40 border border-slate-200 dark:border-white/10 rounded focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 text-sm outline-none transition text-slate-900 dark:text-[#f5f5f5]"
+                          />
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <label className="block text-[10px] font-bold uppercase text-slate-400 dark:text-white/40 tracking-widest mb-1.5">
+                              Monthly Return (%)
+                            </label>
+                            <input
+                              type="number"
+                              step="0.1"
+                              value={inputs.monthlyRate}
+                              onChange={(e) => handleInputChange("monthlyRate", parseFloat(e.target.value) || 0)}
+                              className="w-full px-4 py-2.5 bg-slate-50 dark:bg-black/40 border border-slate-200 dark:border-white/10 rounded focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 text-sm outline-none transition text-slate-900 dark:text-[#f5f5f5]"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[10px] font-bold uppercase text-slate-400 dark:text-white/40 tracking-widest mb-1.5">
+                              Currency
+                            </label>
+                            <select
+                              value={inputs.currency}
+                              onChange={(e) => handleInputChange("currency", e.target.value)}
+                              className="w-full px-3 py-2.5 bg-slate-50 dark:bg-black/40 border border-slate-200 dark:border-white/10 rounded focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 text-xs outline-none transition text-slate-700 dark:text-[#f5f5f5] cursor-pointer"
+                            >
+                              {CURRENCIES.map((c) => (
+                                <option key={c.code} value={c.code} className="bg-slate-100 dark:bg-[#0c0c0c] text-slate-900 dark:text-[#f5f5f5]">
+                                  {c.flag} {c.code}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="pt-4 border-t border-slate-100 dark:border-white/5 flex items-center gap-3">
+                        <button
+                          onClick={handleReset}
+                          className="flex-1 py-2.5 text-center bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 border border-slate-200/50 dark:border-white/10 rounded-sm text-[10px] uppercase tracking-wider font-bold text-slate-700 dark:text-white transition"
+                        >
+                          Reset
+                        </button>
+                        <button
+                          onClick={() => setActiveTab("calculator")}
+                          className="flex-1 py-2.5 text-center bg-emerald-600 hover:bg-emerald-500 text-black rounded-sm text-[10px] uppercase tracking-wider font-bold transition shadow-md shadow-emerald-600/10"
+                        >
+                          Configure
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Timeline projection summary */}
+                    <div className="bg-white dark:bg-[#0c0c0c] rounded-lg border border-slate-200 dark:border-white/10 p-6 lg:p-8 shadow-sm space-y-4">
+                      <h4 className="text-[10px] font-bold uppercase text-slate-400 dark:text-white/40 tracking-widest">
+                        Projection Completion
+                      </h4>
+                      <div className="flex gap-4 items-center">
+                        <div className="p-3 bg-emerald-50 dark:bg-emerald-500/5 text-emerald-600 dark:text-emerald-400 rounded">
+                          <Icon name="calendar" size={18} />
+                        </div>
+                        <div>
+                          <p className="text-[10px] uppercase tracking-wider text-slate-400 dark:text-white/30">Predicted Target Date</p>
+                          <p className="text-base font-serif italic text-slate-900 dark:text-[#f5f5f5] mt-0.5">
+                            {results.monthsNeeded === 3600 ? "Unreachable Goal" : results.completionDate}
+                          </p>
+                        </div>
+                      </div>
+                      <p className="text-[11px] text-slate-400 dark:text-white/40 leading-relaxed font-sans mt-2">
+                        Compounding formulations predict your goal will complete in{" "}
+                        <strong className="text-emerald-500 font-mono font-bold">
+                          {results.monthsNeeded === 3600 ? "N/A" : results.monthsNeeded}
+                        </strong>{" "}
+                        compounding months.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* VIEW 2: FULL CONFIGURATION / CALCULATOR */}
+              {activeTab === "calculator" && (
+                <div className="bg-white dark:bg-[#0c0c0c] rounded-lg border border-slate-200 dark:border-white/10 p-6 lg:p-8 shadow-sm space-y-8">
+                  <div>
+                    <h3 className="text-lg font-serif italic text-slate-900 dark:text-[#f5f5f5]">
+                      Advanced Investment Formulation
+                    </h3>
+                    <p className="text-xs text-slate-400 dark:text-white/40 mt-1">
+                      Use this form to specify capital inputs, returns rates, target assets, and metadata parameters.
+                    </p>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    
+                    <div className="space-y-2">
+                      <label className="block text-[10px] font-bold uppercase text-slate-400 dark:text-white/40 tracking-widest">
+                        Goal Description
+                      </label>
+                      <input
+                        type="text"
+                        value={inputs.goalName}
+                        onChange={(e) => handleInputChange("goalName", e.target.value)}
+                        placeholder="e.g. Dream House Fund"
+                        className="w-full px-4 py-2.5 bg-slate-50 dark:bg-black/40 border border-slate-200 dark:border-white/10 rounded focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 text-sm outline-none transition text-slate-900 dark:text-[#f5f5f5]"
+                      />
+                      <span className="text-[10px] text-slate-400/80 dark:text-white/30">Give this calculation a descriptive title.</span>
+                    </div>
+
+                    <div className="space-y-2">
+                      <label className="block text-[10px] font-bold uppercase text-slate-400 dark:text-white/40 tracking-widest">
+                        Initial Investment Capital
+                      </label>
+                      <div className="relative">
+                        <input
+                          type="number"
+                          value={inputs.investment}
+                          onChange={(e) => handleInputChange("investment", parseFloat(e.target.value) || 0)}
+                          className="w-full pl-9 pr-4 py-2.5 bg-slate-50 dark:bg-black/40 border border-slate-200 dark:border-white/10 rounded focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 text-sm outline-none transition text-slate-900 dark:text-[#f5f5f5]"
+                        />
+                        <span className="absolute left-3.5 top-3 text-xs text-slate-400 font-bold">
+                          {getCurrencyConfig(inputs.currency).symbol}
+                        </span>
+                      </div>
+                      <span className="text-[10px] text-slate-400/80 dark:text-white/30">One-time initial capital deposit.</span>
+                    </div>
+
+                    <div className="space-y-2">
+                      <label className="block text-[10px] font-bold uppercase text-slate-400 dark:text-white/40 tracking-widest">
+                        Monthly Contribution (SIP)
+                      </label>
+                      <div className="relative">
+                        <input
+                          type="number"
+                          value={inputs.monthlyContribution}
+                          onChange={(e) => handleInputChange("monthlyContribution", parseFloat(e.target.value) || 0)}
+                          className="w-full pl-9 pr-4 py-2.5 bg-slate-50 dark:bg-black/40 border border-slate-200 dark:border-white/10 rounded focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 text-sm outline-none transition text-slate-900 dark:text-[#f5f5f5]"
+                        />
+                        <span className="absolute left-3.5 top-3 text-xs text-slate-400 font-bold">
+                          {getCurrencyConfig(inputs.currency).symbol}
+                        </span>
+                      </div>
+                      <span className="text-[10px] text-slate-400/80 dark:text-white/30">Monthly addition to the principal.</span>
+                    </div>
+
+                    <div className="space-y-2">
+                      <label className="block text-[10px] font-bold uppercase text-slate-400 dark:text-white/40 tracking-widest">
+                        Target Wealth Capital Goal
+                      </label>
+                      <div className="relative">
+                        <input
+                          type="number"
+                          value={inputs.targetAmount}
+                          onChange={(e) => handleInputChange("targetAmount", parseFloat(e.target.value) || 0)}
+                          className="w-full pl-9 pr-4 py-2.5 bg-slate-50 dark:bg-black/40 border border-slate-200 dark:border-white/10 rounded focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 text-sm outline-none transition text-slate-900 dark:text-[#f5f5f5]"
+                        />
+                        <span className="absolute left-3.5 top-3 text-xs text-slate-400 font-bold">
+                          {getCurrencyConfig(inputs.currency).symbol}
+                        </span>
+                      </div>
+                      <span className="text-[10px] text-slate-400/80 dark:text-white/30">Goal target valuation.</span>
+                    </div>
+
+                    <div className="space-y-2">
+                      <label className="block text-[10px] font-bold uppercase text-slate-400 dark:text-white/40 tracking-widest">
+                        Assumed Monthly Return (%)
+                      </label>
+                      <input
+                        type="number"
+                        step="0.05"
+                        value={inputs.monthlyRate}
+                        onChange={(e) => handleInputChange("monthlyRate", parseFloat(e.target.value) || 0)}
+                        className="w-full px-4 py-2.5 bg-slate-50 dark:bg-black/40 border border-slate-200 dark:border-white/10 rounded focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 text-sm outline-none transition text-slate-900 dark:text-[#f5f5f5]"
+                      />
+                      <span className="text-[10px] text-slate-400/80 dark:text-white/30">Compound interest rate monthly.</span>
+                    </div>
+
+                    <div className="space-y-2">
+                      <label className="block text-[10px] font-bold uppercase text-slate-400 dark:text-white/40 tracking-widest">
+                        Goal Start Date
+                      </label>
+                      <input
+                        type="date"
+                        value={inputs.startDate}
+                        onChange={(e) => handleInputChange("startDate", e.target.value)}
+                        className="w-full px-4 py-2.5 bg-slate-50 dark:bg-black/40 border border-slate-200 dark:border-white/10 rounded focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 text-sm outline-none transition text-slate-700 dark:text-[#f5f5f5]"
+                      />
+                      <span className="text-[10px] text-slate-400/80 dark:text-white/30">Initial calculation compounding month starting point.</span>
+                    </div>
+                  </div>
+
+                  <div className="pt-6 border-t border-slate-100 dark:border-white/5 flex flex-col sm:flex-row gap-4 justify-between items-center">
+                    <button
+                      onClick={handleReset}
+                      className="w-full sm:w-auto px-6 py-2.5 bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 border border-slate-200/50 dark:border-white/10 rounded-sm text-[10px] uppercase tracking-wider font-bold transition text-slate-700 dark:text-white"
+                    >
+                      Reset Default Parameters
+                    </button>
+
+                    <button
+                      onClick={() => setActiveTab("dashboard")}
+                      className="w-full sm:w-auto px-8 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-black rounded-sm text-[10px] uppercase tracking-wider font-bold transition shadow-lg shadow-emerald-600/10"
+                    >
+                      Calculate Trajectory
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* VIEW 3: GROWTH ANALYTICS */}
+              {activeTab === "analytics" && (
+                <div className="space-y-8">
+                  
+                  {/* SVG Chart Panel */}
+                  <div className="bg-white dark:bg-[#0c0c0c] rounded-lg border border-slate-200 dark:border-white/10 p-6 lg:p-8 shadow-sm space-y-6">
+                    <div>
+                      <h3 className="text-lg font-serif italic text-slate-900 dark:text-white">
+                        Growth Projections Trajectory
+                      </h3>
+                      <p className="text-xs text-slate-400 dark:text-white/40 mt-1">
+                        Visually compare your direct cumulative contributions (dashed line) against the compounding interest curve (solid line).
+                      </p>
+                    </div>
+                    
+                    <div className="bg-slate-50 dark:bg-[#080808] p-4 rounded border border-slate-100 dark:border-white/5">
+                      <AnalyticsChart projections={results.projections} currency={inputs.currency} />
+                    </div>
+                  </div>
+
+                  {/* Detailed Data Tables */}
+                  <div className="bg-white dark:bg-[#0c0c0c] rounded-lg border border-slate-200 dark:border-white/10 p-6 lg:p-8 shadow-sm space-y-6">
+                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                      <div>
+                        <h3 className="text-base font-serif italic text-slate-900 dark:text-white">
+                          Historical Projection Matrix
+                        </h3>
+                        <p className="text-xs text-slate-400 dark:text-white/40 mt-1">
+                          A month-by-month financial projection table showing compound increments.
+                        </p>
+                      </div>
+                      <button
+                        onClick={handleExportCSV}
+                        className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-black text-[10px] font-bold uppercase tracking-widest rounded-sm transition shadow-md shadow-emerald-600/10"
+                      >
+                        <Icon name="download" size={13} />
+                        <span>Export CSV Dataset</span>
+                      </button>
+                    </div>
+
+                    {/* Projections Table Scrollable Container */}
+                    <div className="overflow-x-auto border border-slate-200 dark:border-white/10 rounded-lg">
+                      <table className="w-full text-left border-collapse text-xs">
+                        <thead>
+                          <tr className="bg-slate-50 dark:bg-[#080808] text-slate-400 dark:text-white/40 uppercase tracking-widest font-bold font-mono border-b border-slate-200 dark:border-white/10">
+                            <th className="py-3 px-6 text-center">Month</th>
+                            <th className="py-3 px-6">Predicted Date</th>
+                            <th className="py-3 px-6 text-right">Cumulative Capital</th>
+                            <th className="py-3 px-6 text-right">Accumulated Gain</th>
+                            <th className="py-3 px-6 text-right">Forecasted Balance</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100 dark:divide-white/5 font-medium">
+                          {results.projections.slice(0, 100).map((proj) => (
+                            <tr key={proj.month} className="hover:bg-slate-50/50 dark:hover:bg-white/[0.01]">
+                              <td className="py-3 px-6 text-center text-slate-400 font-mono">{proj.month}</td>
+                              <td className="py-3 px-6 text-slate-500 dark:text-white/60 font-sans">{proj.dateStr}</td>
+                              <td className="py-3 px-6 text-right text-slate-500 dark:text-white/60 font-mono">
+                                {formatCurrency(proj.contributions, inputs.currency)}
+                              </td>
+                              <td className="py-3 px-6 text-right text-emerald-600 dark:text-emerald-400 font-mono">
+                                {formatCurrency(proj.profit, inputs.currency)}
+                              </td>
+                              <td className="py-3 px-6 text-right text-emerald-500 font-bold font-mono">
+                                {formatCurrency(proj.balance, inputs.currency)}
+                              </td>
+                            </tr>
+                          ))}
+                          {results.projections.length > 100 && (
+                            <tr>
+                              <td colSpan={5} className="py-4 text-center text-slate-400 dark:text-white/30 italic">
+                                Showing the first 100 compounding periods of {results.projections.length} periods. Click 'Export CSV Dataset' to save all periods!
+                              </td>
+                            </tr>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* VIEW: INFLATION COMPARING */}
+              {activeTab === "inflation" && (
+                <div className="space-y-8 animate-fade-in">
+                  
+                  {/* Setup Card */}
+                  <div className="bg-white dark:bg-[#0c0c0c] rounded-lg border border-slate-200 dark:border-white/10 p-6 lg:p-8 shadow-sm space-y-6">
+                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                      <div>
+                        <h3 className="text-lg font-serif italic text-slate-900 dark:text-white">
+                          Inflation Comparison Configurator
+                        </h3>
+                        <p className="text-xs text-slate-400 dark:text-white/40 mt-1">
+                          Set your base currency amount and annual inflation rate to calculate real purchasing power retrospectively and prospectively.
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setInflationCompareAmount(inputs.targetAmount);
+                          setInflationCompareRate(inputs.inflationRate || 3.0);
+                        }}
+                        className="px-4 py-2 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-500 text-[10px] font-bold uppercase tracking-widest rounded-sm border border-emerald-500/20 transition flex items-center gap-2 font-mono"
+                      >
+                        <Icon name="slidershorizontal" size={12} />
+                        <span>Sync with Main Goal</span>
+                      </button>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2">
+                      {/* Amount Entry */}
+                      <div className="space-y-2">
+                        <label className="block text-[10px] font-bold uppercase text-slate-400 dark:text-white/40 tracking-widest">
+                          Base Value to Compare ({inputs.currency})
+                        </label>
+                        <div className="relative">
+                          <input
+                            type="number"
+                            min="1"
+                            value={inflationCompareAmount}
+                            onChange={(e) => {
+                              const val = parseFloat(e.target.value);
+                              setInflationCompareAmount(isNaN(val) ? 0 : val);
+                            }}
+                            className="w-full px-4 py-2.5 bg-slate-50 dark:bg-black/40 border border-slate-200 dark:border-white/10 rounded focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 text-sm outline-none transition text-slate-900 dark:text-[#f5f5f5] font-mono"
+                          />
+                          <span className="absolute right-3.5 top-3 text-[11px] font-bold text-emerald-500 font-mono">
+                            {inputs.currency}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Inflation Rate Entry */}
+                      <div className="space-y-2">
+                        <label className="block text-[10px] font-bold uppercase text-slate-400 dark:text-white/40 tracking-widest">
+                          Annual Inflation Rate (%)
+                        </label>
+                        <div className="relative">
+                          <input
+                            type="number"
+                            step="0.1"
+                            min="0.1"
+                            max="100"
+                            value={inflationCompareRate}
+                            onChange={(e) => {
+                              const val = parseFloat(e.target.value);
+                              setInflationCompareRate(isNaN(val) ? 0 : val);
+                            }}
+                            className="w-full px-4 py-2.5 bg-slate-50 dark:bg-black/40 border border-slate-200 dark:border-white/10 rounded focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 text-sm outline-none transition text-slate-900 dark:text-[#f5f5f5] font-mono"
+                          />
+                          <span className="absolute right-3.5 top-3 text-[11px] font-bold text-emerald-500 font-mono">
+                            % / year
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Dual Side-by-Side Panels */}
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                    
+                    {/* LEFT SIDE: PAST INFLATION COMPARISON */}
+                    <div className="bg-white dark:bg-[#0c0c0c] rounded-lg border border-slate-200 dark:border-white/10 p-6 lg:p-8 shadow-sm flex flex-col justify-between space-y-6">
+                      <div className="space-y-4">
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-full bg-slate-100 dark:bg-white/5 flex items-center justify-center text-slate-600 dark:text-slate-300">
+                            ⏪
+                          </div>
+                          <div>
+                            <h4 className="text-base font-serif italic text-slate-900 dark:text-white">
+                              Historical Equivalent (Past Value Ago)
+                            </h4>
+                            <p className="text-xs text-slate-400 dark:text-white/40">
+                              See what today's {formatCurrency(inflationCompareAmount, inputs.currency)} was worth up to 100 years ago.
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* 20 Preset Buttons (5 to 100 years ago) */}
+                        <div className="space-y-2">
+                          <label className="block text-[10px] font-bold uppercase text-slate-400 dark:text-white/40 tracking-widest">
+                            Select Past Timeline (20 options)
+                          </label>
+                          <div className="grid grid-cols-4 sm:grid-cols-5 gap-1.5">
+                            {[5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70, 75, 80, 85, 90, 95, 100].map((yr) => {
+                              const isSelected = pastCompareYears === yr;
+                              return (
+                                <button
+                                  key={yr}
+                                  type="button"
+                                  onClick={() => setPastCompareYears(yr)}
+                                  className={`py-2 text-[10px] font-mono font-bold rounded transition ${
+                                    isSelected
+                                      ? "bg-emerald-500 text-slate-950 shadow-md shadow-emerald-500/20"
+                                      : "bg-slate-50 dark:bg-white/5 border border-slate-200/40 dark:border-white/5 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/10"
+                                  }`}
+                                >
+                                  {yr} Yrs Ago
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+
+                        {/* Manual entry / slider */}
+                        <div className="space-y-2 pt-2 border-t border-slate-100 dark:border-white/5">
+                          <div className="flex justify-between items-center text-xs">
+                            <span className="font-bold text-slate-400 dark:text-white/40 uppercase tracking-widest text-[9px]">
+                              Manual Past Year Entry
+                            </span>
+                            <span className="font-mono text-emerald-500 font-bold bg-emerald-500/10 px-2 py-0.5 rounded">
+                              {pastCompareYears} Years Ago
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-4">
+                            <input
+                              type="range"
+                              min="1"
+                              max="150"
+                              value={pastCompareYears}
+                              onChange={(e) => setPastCompareYears(parseInt(e.target.value))}
+                              className="flex-1 accent-emerald-500 animate-none"
+                            />
+                            <input
+                              type="number"
+                              min="1"
+                              max="200"
+                              value={pastCompareYears}
+                              onChange={(e) => {
+                                const val = parseInt(e.target.value);
+                                setPastCompareYears(isNaN(val) ? 1 : val);
+                              }}
+                              className="w-16 px-2 py-1 text-xs text-center font-mono font-bold bg-slate-50 dark:bg-black/40 border border-slate-200 dark:border-white/10 rounded focus:border-emerald-500 outline-none text-slate-900 dark:text-white"
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Calculation outcomes panel */}
+                      <div className="p-5 bg-slate-50 dark:bg-black/35 rounded-lg border border-slate-200/40 dark:border-white/5 space-y-4">
+                        <div className="text-center py-2">
+                          <span className="text-[10px] font-bold text-slate-400 dark:text-white/40 uppercase tracking-widest block">
+                            Historical Equivalent Cost
+                          </span>
+                          <div className="text-2xl lg:text-3xl font-serif italic text-emerald-500 mt-1">
+                            {formatCurrency(
+                              inflationCompareAmount / Math.pow(1 + inflationCompareRate / 100, pastCompareYears),
+                              inputs.currency
+                            )}
+                          </div>
+                          <span className="text-[10px] text-slate-400/80 mt-1 block font-sans">
+                            equivalent purchasing power in the year {new Date().getFullYear() - pastCompareYears}
+                          </span>
+                        </div>
+
+                        <div className="border-t border-slate-200/50 dark:border-white/5 pt-3 space-y-2 text-xs">
+                          <div className="flex justify-between">
+                            <span className="text-slate-400 font-sans">Cumulative Inflation Factor:</span>
+                            <span className="font-mono font-bold text-slate-600 dark:text-slate-300">
+                              {Math.pow(1 + inflationCompareRate / 100, pastCompareYears).toFixed(2)}x
+                            </span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-slate-400 font-sans">Past Purchasing Power Value:</span>
+                            <span className="font-mono font-bold text-emerald-500">
+                              +{((Math.pow(1 + inflationCompareRate / 100, pastCompareYears) - 1) * 100).toFixed(1)}% higher today
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-slate-400 leading-relaxed pt-2 text-justify border-t border-dashed border-slate-200/40 dark:border-white/5 font-sans">
+                            💡 <strong>Past Comparison Insight:</strong> If you wanted to purchase goods that cost <strong>{formatCurrency(inflationCompareAmount, inputs.currency)}</strong> today, those exact same goods would have cost only <strong>{formatCurrency(inflationCompareAmount / Math.pow(1 + inflationCompareRate / 100, pastCompareYears), inputs.currency)}</strong> in the year {new Date().getFullYear() - pastCompareYears}, assuming an average constant annual inflation rate of <strong>{inflationCompareRate}%</strong>.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* RIGHT SIDE: FUTURE INFLATION COMPARISON */}
+                    <div className="bg-white dark:bg-[#0c0c0c] rounded-lg border border-slate-200 dark:border-white/10 p-6 lg:p-8 shadow-sm flex flex-col justify-between space-y-6">
+                      <div className="space-y-4">
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-full bg-slate-100 dark:bg-white/5 flex items-center justify-center text-slate-600 dark:text-slate-300">
+                            ⏩
+                          </div>
+                          <div>
+                            <h4 className="text-base font-serif italic text-slate-900 dark:text-white">
+                              Future Horizon (Value Later)
+                            </h4>
+                            <p className="text-xs text-slate-400 dark:text-white/40">
+                              See what today's {formatCurrency(inflationCompareAmount, inputs.currency)} is worth up to 100 years in the future.
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* 20 Preset Buttons (5 to 100 years later) */}
+                        <div className="space-y-2">
+                          <label className="block text-[10px] font-bold uppercase text-slate-400 dark:text-white/40 tracking-widest">
+                            Select Future Timeline (20 options)
+                          </label>
+                          <div className="grid grid-cols-4 sm:grid-cols-5 gap-1.5">
+                            {[5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70, 75, 80, 85, 90, 95, 100].map((yr) => {
+                              const isSelected = futureCompareYears === yr;
+                              return (
+                                <button
+                                  key={yr}
+                                  type="button"
+                                  onClick={() => setFutureCompareYears(yr)}
+                                  className={`py-2 text-[10px] font-mono font-bold rounded transition ${
+                                    isSelected
+                                      ? "bg-emerald-500 text-slate-950 shadow-md shadow-emerald-500/20"
+                                      : "bg-slate-50 dark:bg-white/5 border border-slate-200/40 dark:border-white/5 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/10"
+                                  }`}
+                                >
+                                  {yr} Yrs Later
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+
+                        {/* Manual entry / slider */}
+                        <div className="space-y-2 pt-2 border-t border-slate-100 dark:border-white/5">
+                          <div className="flex justify-between items-center text-xs">
+                            <span className="font-bold text-slate-400 dark:text-white/40 uppercase tracking-widest text-[9px]">
+                              Manual Future Year Entry
+                            </span>
+                            <span className="font-mono text-emerald-500 font-bold bg-emerald-500/10 px-2 py-0.5 rounded">
+                              {futureCompareYears} Years Later
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-4">
+                            <input
+                              type="range"
+                              min="1"
+                              max="150"
+                              value={futureCompareYears}
+                              onChange={(e) => setFutureCompareYears(parseInt(e.target.value))}
+                              className="flex-1 accent-emerald-500 animate-none"
+                            />
+                            <input
+                              type="number"
+                              min="1"
+                              max="200"
+                              value={futureCompareYears}
+                              onChange={(e) => {
+                                const val = parseInt(e.target.value);
+                                setFutureCompareYears(isNaN(val) ? 1 : val);
+                              }}
+                              className="w-16 px-2 py-1 text-xs text-center font-mono font-bold bg-slate-50 dark:bg-black/40 border border-slate-200 dark:border-white/10 rounded focus:border-emerald-500 outline-none text-slate-900 dark:text-white"
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Calculation outcomes panel */}
+                      <div className="p-5 bg-slate-50 dark:bg-black/35 rounded-lg border border-slate-200/40 dark:border-white/5 space-y-4">
+                        <div className="text-center py-2">
+                          <span className="text-[10px] font-bold text-slate-400 dark:text-white/40 uppercase tracking-widest block">
+                            Future Nominal Cost of Same Goods
+                          </span>
+                          <div className="text-2xl lg:text-3xl font-serif italic text-emerald-500 mt-1">
+                            {formatCurrency(
+                              inflationCompareAmount * Math.pow(1 + inflationCompareRate / 100, futureCompareYears),
+                              inputs.currency
+                            )}
+                          </div>
+                          <span className="text-[10px] text-slate-400/80 mt-1 block font-sans">
+                            needed to buy the same value of goods in the year {new Date().getFullYear() + futureCompareYears}
+                          </span>
+                        </div>
+
+                        <div className="border-t border-slate-200/50 dark:border-white/5 pt-3 space-y-2 text-xs">
+                          <div className="flex justify-between">
+                            <span className="text-slate-400 font-sans">Future Cash Purchasing Power:</span>
+                            <span className="font-mono font-bold text-red-500">
+                              {formatCurrency(
+                                inflationCompareAmount / Math.pow(1 + inflationCompareRate / 100, futureCompareYears),
+                                inputs.currency
+                              )}
+                            </span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-slate-400 font-sans">Total Purchasing Power Loss:</span>
+                            <span className="font-mono font-bold text-red-500">
+                              -{((1 - 1 / Math.pow(1 + inflationCompareRate / 100, futureCompareYears)) * 100).toFixed(1)}% devalued
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-slate-400 leading-relaxed pt-2 text-justify border-t border-dashed border-slate-200/40 dark:border-white/5 font-sans">
+                            💡 <strong>Future Comparison Insight:</strong> Keeping <strong>{formatCurrency(inflationCompareAmount, inputs.currency)}</strong> as raw idle cash for {futureCompareYears} years will cause its real value to drop to <strong>{formatCurrency(inflationCompareAmount / Math.pow(1 + inflationCompareRate / 100, futureCompareYears), inputs.currency)}</strong>. Conversely, to purchase what costs <strong>{formatCurrency(inflationCompareAmount, inputs.currency)}</strong> today, you will need to spend <strong>{formatCurrency(inflationCompareAmount * Math.pow(1 + inflationCompareRate / 100, futureCompareYears), inputs.currency)}</strong> in the year {new Date().getFullYear() + futureCompareYears}.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+
+                  </div>
+                </div>
+              )}
+
+              {/* VIEW 4: COMPARATIVE MATRIX */}
+              {activeTab === "reports" && (
+                <div className="bg-white dark:bg-[#0c0c0c] rounded-lg border border-slate-200 dark:border-white/10 p-6 lg:p-8 shadow-sm space-y-8">
+                  <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                    <div>
+                      <h3 className="text-lg font-serif italic text-slate-900 dark:text-white">
+                        Compounding Benchmarks
+                      </h3>
+                      <p className="text-xs text-slate-400 dark:text-white/40 mt-1">
+                        Select predefined return rate brackets or customize each individual rate directly in the table below to see how varying rates reach your target wealth goal.
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Bracket Preset Selector Buttons */}
+                  <div className="space-y-3">
+                    <span className="text-[10px] font-bold text-slate-400 dark:text-white/40 uppercase tracking-widest block">
+                      Select Return Rate Bracket (Preset)
+                    </span>
+                    <div className="flex flex-wrap gap-2">
+                      {rateBrackets.map((bracket) => {
+                        const isActive = activeBracket === bracket.id;
+                        return (
+                          <button
+                            key={bracket.id}
+                            onClick={() => {
+                              setComparisonRates(bracket.values);
+                              setActiveBracket(bracket.id);
+                            }}
+                            className={`px-4 py-2 rounded-md text-xs font-semibold tracking-wider transition ${
+                              isActive
+                                ? "bg-emerald-500 text-black font-bold shadow-md shadow-emerald-500/10"
+                                : "bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-white/10"
+                            }`}
+                          >
+                            {bracket.label}
+                          </button>
+                        );
+                      })}
+                      <button
+                        onClick={() => {
+                          setActiveBracket("custom");
+                        }}
+                        className={`px-4 py-2 rounded-md text-xs font-semibold tracking-wider transition border ${
+                          activeBracket === "custom"
+                            ? "border-emerald-500 text-emerald-500 bg-emerald-500/5 font-bold"
+                            : "border-dashed border-slate-300 dark:border-white/10 text-slate-400 hover:text-slate-500"
+                        }`}
+                      >
+                        Custom Matrix
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="overflow-x-auto border border-slate-200 dark:border-white/10 rounded-lg">
+                    <table className="w-full text-left border-collapse text-xs">
+                      <thead>
+                        <tr className="bg-slate-50 dark:bg-[#080808] text-slate-400 dark:text-white/40 uppercase tracking-widest font-bold font-mono border-b border-slate-200 dark:border-white/10">
+                          <th className="py-3 px-6">Varying Monthly Rate (Editable)</th>
+                          <th className="py-3 px-6 text-center">Months Needed</th>
+                          <th className="py-3 px-6 text-center">Duration Prediction</th>
+                          <th className="py-3 px-7 text-right">Forecast Value Reached</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100 dark:divide-white/5 font-medium">
+                        {comparisonRates.map((rate, idx) => {
+                          const compResults = calculateWealthProjection({
+                            ...inputs,
+                            monthlyRate: rate,
+                          });
+                          return (
+                            <tr key={idx} className="hover:bg-slate-50/50 dark:hover:bg-white/[0.01]">
+                              <td className="py-4 px-6 text-slate-800 dark:text-slate-200">
+                                <div className="flex items-center gap-2">
+                                  <input
+                                    type="number"
+                                    step="0.1"
+                                    min="0"
+                                    max="100"
+                                    value={rate}
+                                    onChange={(e) => {
+                                      const val = parseFloat(e.target.value);
+                                      const nextRates = [...comparisonRates];
+                                      nextRates[idx] = isNaN(val) ? 0 : val;
+                                      setComparisonRates(nextRates);
+                                      setActiveBracket("custom");
+                                    }}
+                                    className="w-20 px-2 py-1 text-xs font-mono font-bold text-center border border-slate-300 dark:border-white/20 bg-white dark:bg-black/50 text-emerald-600 dark:text-emerald-400 rounded focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                                  />
+                                  <span className="text-slate-400 font-medium">% monthly rate</span>
+                                </div>
+                              </td>
+                              <td className="py-4 px-6 text-center font-mono">
+                                {compResults.monthsNeeded === 3600 ? "Unreachable" : compResults.monthsNeeded}
+                              </td>
+                              <td className="py-4 px-6 text-center text-slate-500 dark:text-white/60">
+                                {compResults.monthsNeeded === 3600
+                                  ? "N/A"
+                                  : `${compResults.yearsNeeded} Years, ${compResults.remainingMonths} Months`}
+                              </td>
+                              <td className="py-4 px-7 text-right text-emerald-500 font-bold font-mono">
+                                {formatCurrency(compResults.finalAmount, inputs.currency)}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  <div className="p-5 bg-slate-50 dark:bg-white/[0.01] rounded border border-slate-200/50 dark:border-white/5">
+                    <h4 className="text-sm font-serif italic text-slate-900 dark:text-white mb-2">
+                      Benchmark Analysis Summary
+                    </h4>
+                    <p className="text-xs text-slate-400 dark:text-white/50 leading-relaxed">
+                      Compounding growth reacts strongly to small incremental differences in rates.
+                      {(() => {
+                        const sortedRates = [...comparisonRates].sort((a, b) => a - b);
+                        const minRate = sortedRates[0] ?? 1.0;
+                        const maxRate = sortedRates[sortedRates.length - 1] ?? 5.0;
+
+                        const minResults = calculateWealthProjection({ ...inputs, monthlyRate: minRate });
+                        const maxResults = calculateWealthProjection({ ...inputs, monthlyRate: maxRate });
+
+                        return (
+                          <span>
+                            {" "}By selecting a higher compounding rate of <strong className="text-emerald-400 font-serif italic">{maxRate.toFixed(1)}%</strong>,
+                            your predicted duration to target is <span className="font-mono text-emerald-400 font-semibold">{maxResults.monthsNeeded === 3600 ? "unreachable" : `${maxResults.monthsNeeded} months`}</span> compared
+                            to <span className="font-mono text-slate-400 font-semibold">{minResults.monthsNeeded === 3600 ? "unreachable" : `${minResults.monthsNeeded} months`}</span> if
+                            compounding rate is at <strong className="text-slate-400 font-serif italic">{minRate.toFixed(1)}%</strong>.
+                            {minResults.monthsNeeded !== 3600 && maxResults.monthsNeeded !== 3600 && (
+                              <span> A difference of <strong className="text-emerald-300 font-mono">{Math.abs(minResults.monthsNeeded - maxResults.monthsNeeded)} months</strong> (~{Math.abs(minResults.yearsNeeded - maxResults.yearsNeeded)} years) in your timeline!</span>
+                            )}
+                          </span>
+                        );
+                      })()}
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {/* VIEW 5: FAQS */}
+              {activeTab === "faq" && (
+                <div className="bg-white dark:bg-[#0c0c0c] rounded-lg border border-slate-200 dark:border-white/10 p-6 lg:p-8 shadow-sm space-y-8">
+                  <div>
+                    <h3 className="text-lg font-serif italic text-slate-900 dark:text-white">
+                      Investment Intelligence FAQs
+                    </h3>
+                    <p className="text-xs text-slate-400 dark:text-white/40 mt-1">
+                      Quick financial insights on compound rates and target planning.
+                    </p>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {[
+                      {
+                        q: "What is compound monthly compounding return?",
+                        a: "Monthly return rates accumulate incrementally. For example, a 1.2% monthly rate over 12 months results in ~15.4% annual percentage yield (APY). This is the key behind SIP wealth engines.",
+                      },
+                      {
+                        q: "How does the SIP Contribution frequency work?",
+                        a: "Monthly contribution occurs precisely at the start of each compounding period, maximizing the growth potential of each deposit.",
+                      },
+                      {
+                        q: "What does equivalent CAGR represent?",
+                        a: "Equivalent CAGR is the Compound Annual Growth Rate needed for a single deposit to grow to the final balance over the specified years. It serves as a benchmark for comparison.",
+                      },
+                    ].map((faq, i) => (
+                      <div
+                        key={i}
+                        className="p-5 bg-slate-50 dark:bg-white/[0.01] border border-slate-200/50 dark:border-white/5 rounded"
+                      >
+                        <h4 className="text-sm font-serif italic text-slate-950 dark:text-[#f5f5f5] mb-2">
+                          {faq.q}
+                        </h4>
+                        <p className="text-xs text-slate-400 dark:text-white/50 leading-relaxed">
+                          {faq.a}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* VIEW 6: DEVELOPER PROFILE */}
+              {activeTab === "developer" && (
+                <div className="bg-white dark:bg-[#0c0c0c] rounded-lg border border-slate-200 dark:border-white/10 p-6 lg:p-8 shadow-sm space-y-8">
+                  <div className="text-center max-w-xl mx-auto space-y-4">
+                    <div className="w-14 h-14 bg-emerald-500 rounded-sm mx-auto flex items-center justify-center text-black text-xl font-bold shadow-lg italic">
+                      WP
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-serif italic text-slate-900 dark:text-white">
+                        Ultimate Wealth Pro Dev Team
+                      </h3>
+                      <p className="text-xs text-slate-400 dark:text-white/40 mt-1">
+                        Crafting highly refined computational finance applications. Let's connect on any platforms below!
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 max-w-5xl mx-auto">
+                    {[
+                      {
+                        name: "WhatsApp",
+                        label: "Direct Chat Support",
+                        icon: "messagesquare",
+                        link: "https://wa.me/919876543210",
+                      },
+                      {
+                        name: "Telegram",
+                        label: "Developer Channel",
+                        icon: "send",
+                        link: "https://t.me/YourTelegramUsername",
+                      },
+                      {
+                        name: "LinkedIn",
+                        label: "Professional Profile",
+                        icon: "linkedin",
+                        link: "https://www.linkedin.com/in/YourLinkedInUsername",
+                      },
+                      {
+                        name: "Twitter (X)",
+                        label: "Financial Updates",
+                        icon: "twitter",
+                        link: "https://twitter.com/YourTwitterUsername",
+                      },
+                      {
+                        name: "Website",
+                        label: "Personal Portfolio",
+                        icon: "globe",
+                        link: "https://yourwebsite.com",
+                      },
+                      {
+                        name: "Email",
+                        label: "Direct Inquiry",
+                        icon: "mail",
+                        link: "mailto:you@example.com",
+                      },
+                    ].map((plat) => (
+                      <a
+                        key={plat.name}
+                        href={plat.link}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="p-5 rounded border border-slate-200 dark:border-white/10 bg-slate-50/50 dark:bg-white/[0.01] flex items-center gap-4 hover:-translate-y-0.5 hover:border-emerald-500/30 transition-all duration-300"
+                      >
+                        <div className="p-2.5 rounded bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/5 text-emerald-500 shadow-sm">
+                          <Icon name={plat.icon} size={18} />
+                        </div>
+                        <div>
+                          <p className="text-xs font-bold text-slate-900 dark:text-[#f5f5f5]">{plat.name}</p>
+                          <p className="text-[10px] text-slate-400 dark:text-white/40">{plat.label}</p>
+                        </div>
+                      </a>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* General Policy Disclaimer Card */}
+              <footer className="p-5 bg-amber-500/5 dark:bg-amber-500/5 rounded border border-amber-500/20 flex gap-3 text-[11px] text-slate-500 dark:text-white/50 leading-relaxed font-sans">
+                <Icon name="filewarning" size={16} className="text-amber-500 shrink-0 mt-0.5" />
+                <p>
+                  <strong>Investment Disclaimer:</strong> Wealth projections provided by Ultimate Wealth Calculator Pro are estimates modeled on compound interest formulations. Actual market investments fluctuate dynamically based on market performance, taxation, capital fees, and specific asset risks. Always perform professional financial consultations.
+                </p>
+              </footer>
+
+            </div>
+          </main>
+        </div>
+      );
+    }
+
+    const container = document.getElementById('root');
+    const root = ReactDOM.createRoot(container);
+    root.render(<App />);
+  </script>
+</body>
+</html>

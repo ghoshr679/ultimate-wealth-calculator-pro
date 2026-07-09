@@ -1,0 +1,6 @@
+{
+  "name": "Ultimate Wealth Calculator Pro",
+  "description": "A professional-grade wealth planning dashboard with forecasts, SIP tracking, growth analytics, comparison charts, and shareable reports.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

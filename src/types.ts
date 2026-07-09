@@ -32,6 +32,39 @@ export interface RiskProfile {
   };
 }
 
+export interface Goal {
+  id: string;
+  name: string;
+  targetAmount: number;
+  currentAmount: number;
+  monthlyContribution: number;
+  expectedReturn: number;
+  priority: "high" | "medium" | "low";
+  deadline?: string;
+  currency: string;
+}
+
+export interface TaxInfo {
+  annualIncome: number;
+  taxBracket: number; // as percentage
+  capitalGainsTax: number;
+  effectiveReturn: number;
+  taxPaid: number;
+}
+
+export interface PortfolioRecommendation {
+  riskLevel: string;
+  allocation: {
+    equities: number;
+    bonds: number;
+    gold: number;
+    cash: number;
+  };
+  expectedReturn: number;
+  expectedVolatility: number;
+  timeHorizon: string;
+}
+
 export interface MonthlyProjection {
   month: number;
   dateStr: string;

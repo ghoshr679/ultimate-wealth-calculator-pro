@@ -334,3 +334,78 @@ export async function copyToClipboard(text: string): Promise<boolean> {
   }
 }
 
+// Tax calculator
+export function calculateTaxImpact(inputs: CalculationInputs, taxRate: number, capitalGainsTaxRate: number): { afterTaxReturn: number; taxPaid: number; effectiveRate: number } {
+  const annualReturn = inputs.monthlyRate * 12;
+  const results = calculateWealthProjection(inputs);
+  
+  const gainsTax = (results.totalProfit * capitalGainsTaxRate) / 100;
+  const incomeTax = (results.totalProfit * (taxRate / 12)) / 100;
+  const totalTax = Math.min(gainsTax + incomeTax, results.totalProfit * 0.3); // Cap at 30%
+  
+  return {
+    afterTaxReturn: results.finalAmount - totalTax,
+    taxPaid: totalTax,
+    effectiveRate: (totalTax / results.finalAmount) * 100,
+  };
+}
+
+// Portfolio recommendations based on risk
+export function getPortfolioRecommendation(riskScore: number): { allocation: { equities: number; bonds: number; gold: number; cash: number }; expectedReturn: number; expectedVolatility: number } {
+  let allocation = { equities: 50, bonds: 30, gold: 10, cash: 10 };
+  let expectedReturn = 8.5;
+  let expectedVolatility = 10;
+
+  if (riskScore < 30) {
+    // Conservative
+    allocation = { equities: 20, bonds: 50, gold: 15, cash: 15 };
+    expectedReturn = 5.5;
+    expectedVolatility = 5;
+  } else if (riskScore < 60) {
+    // Moderate
+    allocation = { equities: 45, bonds: 35, gold: 12, cash: 8 };
+    expectedReturn = 7.5;
+    expectedVolatility = 8;
+  } else if (riskScore < 80) {
+    // Moderately Aggressive
+    allocation = { equities: 65, bonds: 20, gold: 10, cash: 5 };
+    expectedReturn = 10;
+    expectedVolatility = 12;
+  } else {
+    // Aggressive
+    allocation = { equities: 80, bonds: 10, gold: 5, cash: 5 };
+    expectedReturn = 12;
+    expectedVolatility = 15;
+  }
+
+  return {
+    allocation,
+    expectedReturn,
+    expectedVolatility,
+  };
+}
+
+// Multi-goal tracker
+export function prioritizeGoals(goals: Array<{ name: string; targetAmount: number; currentAmount: number; priority: string }>): Array<{ name: string; progress: number; status: string }> {
+  return goals
+    .map((goal) => ({
+      name: goal.name,
+      progress: (goal.currentAmount / goal.targetAmount) * 100,
+      status: goal.priority,
+    }))
+    .sort((a, b) => {
+      const priorityOrder = { high: 0, medium: 1, low: 2 };
+      return (priorityOrder[a.status as keyof typeof priorityOrder] || 2) - (priorityOrder[b.status as keyof typeof priorityOrder] || 2);
+    });
+}
+
+// Wealth milestone tracker
+export function getWealthMilestones(finalAmount: number, currency: string): Array<{ milestone: number; percentage: number; timeToReach: string }> {
+  return [
+    { milestone: finalAmount * 0.25, percentage: 25, timeToReach: "First Quarter" },
+    { milestone: finalAmount * 0.5, percentage: 50, timeToReach: "Halfway" },
+    { milestone: finalAmount * 0.75, percentage: 75, timeToReach: "Three Quarters" },
+    { milestone: finalAmount, percentage: 100, timeToReach: "Complete" },
+  ];
+}
+

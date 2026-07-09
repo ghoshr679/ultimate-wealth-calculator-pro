@@ -32,6 +32,8 @@ import {
   AlertCircle,
   BarChart3,
   Target,
+  Zap,
+  PieChart,
 } from "lucide-react";
 import { CalculationInputs, CalculationResults, CurrencyOption } from "./types";
 import {
@@ -48,15 +50,20 @@ import {
   exportToJSON,
   calculateRiskProfile,
   copyToClipboard,
+  calculateTaxImpact,
+  getPortfolioRecommendation,
 } from "./utils/helpers";
 import AnalyticsChart from "./components/AnalyticsChart";
+import TaxCalculator from "./components/TaxCalculator";
+import PortfolioAdvisor from "./components/PortfolioAdvisor";
+import MultiGoalTracker from "./components/MultiGoalTracker";
 
 export default function App() {
   // Theme state: default to system preference or dark
   const [theme, setTheme] = useState<"dark" | "light">("dark");
 
   // Navigation tab state
-  const [activeTab, setActiveTab] = useState<"dashboard" | "calculator" | "analytics" | "reports" | "developer" | "faq" | "inflation" | "compare" | "risk">("dashboard");
+  const [activeTab, setActiveTab] = useState<"dashboard" | "calculator" | "analytics" | "reports" | "developer" | "faq" | "inflation" | "compare" | "risk" | "tax" | "portfolio" | "goals">("dashboard");
 
   // Copy to clipboard feedback
   const [copyFeedback, setCopyFeedback] = useState<string | null>(null);
@@ -320,6 +327,9 @@ Generated via Ultimate Wealth Calculator Pro.
                 { id: "reports", label: "Rate Comparison", icon: <Scale size={17} /> },
                 { id: "compare", label: "Scenario Compare", icon: <BarChart3 size={17} /> },
                 { id: "risk", label: "Risk Calculator", icon: <Target size={17} /> },
+                { id: "tax", label: "Tax Calculator", icon: <DollarSign size={17} /> },
+                { id: "portfolio", label: "Portfolio Advisor", icon: <PieChart size={17} /> },
+                { id: "goals", label: "Multi-Goal Tracker", icon: <Zap size={17} /> },
                 { id: "faq", label: "Financial FAQ", icon: <CircleHelp size={17} /> },
                 { id: "developer", label: "Developer", icon: <UserCheck size={17} /> },
               ].map((item) => (
@@ -385,6 +395,9 @@ Generated via Ultimate Wealth Calculator Pro.
                 {activeTab === "reports" && "Benchmark Comparatives"}
                 {activeTab === "compare" && "Scenario Comparison Tool"}
                 {activeTab === "risk" && "Risk Profile & Asset Allocation"}
+                {activeTab === "tax" && "Tax Impact Calculator"}
+                {activeTab === "portfolio" && "Portfolio Recommendations"}
+                {activeTab === "goals" && "Multi-Goal Wealth Tracker"}
                 {activeTab === "faq" && "Investment Intelligence"}
                 {activeTab === "developer" && "Developer Profile Panel"}
               </h2>
@@ -437,39 +450,39 @@ Generated via Ultimate Wealth Calculator Pro.
           </header>
 
           {/* Content Area */}
-          <div className="flex-1 p-6 lg:p-8 space-y-8 overflow-y-auto max-w-[1400px] w-full mx-auto">
+          <div className="flex-1 p-4 sm:p-6 lg:p-8 space-y-6 sm:space-y-8 overflow-y-auto max-w-full lg:max-w-[1400px] w-full mx-auto">
             
             {/* Quick Stats Panel Header on top of all sheets */}
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-              <div className="bg-white dark:bg-white/[0.02] dark:border-white/5 border-l-2 border-emerald-500/30 dark:border-l-emerald-400 pl-5 border border-slate-200 p-5 rounded-lg shadow-sm flex flex-col justify-between">
-                <span className="text-[10px] font-bold text-slate-400 dark:text-white/40 uppercase tracking-widest">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-4">
+              <div className="bg-white dark:bg-white/[0.02] dark:border-white/5 border-l-2 border-emerald-500/30 dark:border-l-emerald-400 pl-4 sm:pl-5 border border-slate-200 p-4 sm:p-5 rounded-lg shadow-sm flex flex-col justify-between">
+                <span className="text-[9px] sm:text-[10px] font-bold text-slate-400 dark:text-white/40 uppercase tracking-widest">
                   Target Capital
                 </span>
-                <h3 className="text-lg lg:text-3xl font-serif tracking-tight text-slate-950 dark:text-[#f5f5f5] mt-1.5">
+                <h3 className="text-base sm:text-lg lg:text-3xl font-serif tracking-tight text-slate-950 dark:text-[#f5f5f5] mt-1.5">
                   {formatCurrency(inputs.targetAmount, inputs.currency)}
                 </h3>
               </div>
-              <div className="bg-white dark:bg-white/[0.02] dark:border-white/5 border-l-2 border-emerald-500/30 dark:border-l-emerald-400 pl-5 border border-slate-200 p-5 rounded-lg shadow-sm flex flex-col justify-between">
-                <span className="text-[10px] font-bold text-slate-400 dark:text-white/40 uppercase tracking-widest">
+              <div className="bg-white dark:bg-white/[0.02] dark:border-white/5 border-l-2 border-emerald-500/30 dark:border-l-emerald-400 pl-4 sm:pl-5 border border-slate-200 p-4 sm:p-5 rounded-lg shadow-sm flex flex-col justify-between">
+                <span className="text-[9px] sm:text-[10px] font-bold text-slate-400 dark:text-white/40 uppercase tracking-widest">
                   Initial Invested
                 </span>
-                <h3 className="text-lg lg:text-3xl font-serif tracking-tight text-slate-950 dark:text-[#f5f5f5] mt-1.5">
+                <h3 className="text-base sm:text-lg lg:text-3xl font-serif tracking-tight text-slate-950 dark:text-[#f5f5f5] mt-1.5">
                   {formatCurrency(inputs.investment, inputs.currency)}
                 </h3>
               </div>
-              <div className="bg-white dark:bg-white/[0.02] dark:border-white/5 border-l-2 border-emerald-500/30 dark:border-l-emerald-400 pl-5 border border-slate-200 p-5 rounded-lg shadow-sm flex flex-col justify-between">
-                <span className="text-[10px] font-bold text-slate-400 dark:text-white/40 uppercase tracking-widest">
+              <div className="bg-white dark:bg-white/[0.02] dark:border-white/5 border-l-2 border-emerald-500/30 dark:border-l-emerald-400 pl-4 sm:pl-5 border border-slate-200 p-4 sm:p-5 rounded-lg shadow-sm flex flex-col justify-between">
+                <span className="text-[9px] sm:text-[10px] font-bold text-slate-400 dark:text-white/40 uppercase tracking-widest">
                   Monthly Contribution
                 </span>
-                <h3 className="text-lg lg:text-3xl font-serif tracking-tight text-slate-950 dark:text-[#f5f5f5] mt-1.5">
+                <h3 className="text-base sm:text-lg lg:text-3xl font-serif tracking-tight text-slate-950 dark:text-[#f5f5f5] mt-1.5">
                   {formatCurrency(inputs.monthlyContribution, inputs.currency)}
                 </h3>
               </div>
-              <div className="bg-white dark:bg-white/[0.02] dark:border-white/5 border-l-2 border-emerald-500/30 dark:border-l-emerald-400 pl-5 border border-slate-200 p-5 rounded-lg shadow-sm flex flex-col justify-between">
-                <span className="text-[10px] font-bold text-slate-400 dark:text-white/40 uppercase tracking-widest">
+              <div className="bg-white dark:bg-white/[0.02] dark:border-white/5 border-l-2 border-emerald-500/30 dark:border-l-emerald-400 pl-4 sm:pl-5 border border-slate-200 p-4 sm:p-5 rounded-lg shadow-sm flex flex-col justify-between">
+                <span className="text-[9px] sm:text-[10px] font-bold text-slate-400 dark:text-white/40 uppercase tracking-widest">
                   Time Predicted
                 </span>
-                <h3 className="text-lg lg:text-3xl font-serif tracking-tight text-emerald-600 dark:text-emerald-400 mt-1.5">
+                <h3 className="text-base sm:text-lg lg:text-3xl font-serif tracking-tight text-emerald-600 dark:text-emerald-400 mt-1.5">
                   {results.monthsNeeded === 3600
                     ? "unreachable"
                     : `${results.yearsNeeded}y ${results.remainingMonths}m`}
@@ -1880,6 +1893,43 @@ Generated via Ultimate Wealth Calculator Pro.
                     </div>
                   )}
                 </div>
+              </div>
+            )}
+
+            {/* VIEW 9: TAX CALCULATOR */}
+            {activeTab === "tax" && (
+              <div className="bg-white dark:bg-[#0c0c0c] rounded-lg border border-slate-200 dark:border-white/10 p-6 lg:p-8 shadow-sm space-y-6">
+                <TaxCalculator inputs={inputs} results={results} />
+              </div>
+            )}
+
+            {/* VIEW 10: PORTFOLIO ADVISOR */}
+            {activeTab === "portfolio" && (
+              <div className="bg-white dark:bg-[#0c0c0c] rounded-lg border border-slate-200 dark:border-white/10 p-6 lg:p-8 shadow-sm space-y-6">
+                {riskAnswers.some((a) => a !== 0) && (
+                  (() => {
+                    const profile = calculateRiskProfile(riskAnswers);
+                    return <PortfolioAdvisor riskScore={profile.score} riskLevel={profile.level} />;
+                  })()
+                )}
+                {!riskAnswers.some((a) => a !== 0) && (
+                  <div className="p-6 text-center">
+                    <p className="text-slate-600 dark:text-white/60 mb-4">Please complete the Risk Calculator first to get personalized portfolio recommendations.</p>
+                    <button
+                      onClick={() => setActiveTab("risk")}
+                      className="px-6 py-2.5 bg-emerald-500 hover:bg-emerald-600 text-white font-semibold rounded transition-colors"
+                    >
+                      Go to Risk Calculator
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* VIEW 11: MULTI-GOAL TRACKER */}
+            {activeTab === "goals" && (
+              <div className="bg-white dark:bg-[#0c0c0c] rounded-lg border border-slate-200 dark:border-white/10 p-6 lg:p-8 shadow-sm space-y-6">
+                <MultiGoalTracker currency={inputs.currency} />
               </div>
             )}
 

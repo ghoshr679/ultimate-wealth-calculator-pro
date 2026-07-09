@@ -281,15 +281,23 @@ Generated via Ultimate Wealth Calculator Pro.
   ];
 
   return (
-    <div className={`min-h-screen font-sans antialiased text-slate-900 dark:text-[#f5f5f5] bg-slate-50 dark:bg-[#0a0a0a] transition-colors duration-300`}>
+    <div
+      className={`min-h-screen font-sans antialiased text-slate-900 dark:text-[#f5f5f5] bg-slate-50 dark:bg-[#0a0a0a] transition-colors duration-300`}
+      role="application"
+      aria-label="Ultimate Wealth Calculator Pro"
+    >
       {/* Container holding layout */}
       <div className="flex flex-col lg:flex-row min-h-screen">
         
         {/* Navigation Sidebar */}
-        <aside className="w-full lg:w-72 bg-white dark:bg-[#0c0c0c] border-b lg:border-b-0 lg:border-r border-slate-200 dark:border-white/10 flex flex-col justify-between p-6 shrink-0 shadow-sm z-30">
+        <aside
+          className="w-full lg:w-72 bg-white dark:bg-[#0c0c0c] border-b lg:border-b-0 lg:border-r border-slate-200 dark:border-white/10 flex flex-col justify-between p-6 shrink-0 shadow-sm z-30"
+          role="navigation"
+          aria-label="Main navigation"
+        >
           <div>
             <div className="flex items-center gap-3 mb-8">
-              <div className="w-9 h-9 bg-emerald-500 rounded-sm flex items-center justify-center font-bold text-black text-xs italic shadow-md">
+              <div className="w-9 h-9 bg-emerald-500 rounded-sm flex items-center justify-center font-bold text-black text-xs italic shadow-md" aria-hidden="true">
                 VA
               </div>
               <div>
@@ -303,7 +311,7 @@ Generated via Ultimate Wealth Calculator Pro.
             </div>
 
             {/* Sidebar Navigation Options */}
-            <nav className="space-y-1.5">
+            <nav className="space-y-1.5" aria-label="Tab navigation">
               {[
                 { id: "dashboard", label: "Dashboard", icon: <LineChart size={17} /> },
                 { id: "calculator", label: "Calculator Tools", icon: <SlidersHorizontal size={17} /> },
@@ -323,11 +331,14 @@ Generated via Ultimate Wealth Calculator Pro.
                       ? "bg-white/5 dark:bg-white/10 text-slate-900 dark:text-emerald-400 border border-slate-200 dark:border-white/10 font-bold"
                       : "text-slate-500 dark:text-white/50 hover:bg-slate-50 dark:hover:bg-white/5 hover:text-slate-900 dark:hover:text-white"
                   }`}
+                  aria-current={activeTab === item.id ? "page" : undefined}
+                  aria-label={item.label}
+                  role="tab"
                 >
                   {item.icon}
                   <span>{item.label}</span>
                   {activeTab === item.id && (
-                    <ChevronRight size={13} className="ml-auto text-emerald-400" />
+                    <ChevronRight size={13} className="ml-auto text-emerald-400" aria-hidden="true" />
                   )}
                 </button>
               ))}
@@ -645,51 +656,95 @@ Generated via Ultimate Wealth Calculator Pro.
                         {/* Interactive Small Fields */}
                         <div className="space-y-4">
                           <div>
-                            <label className="block text-[10px] font-bold uppercase text-slate-400 dark:text-white/40 tracking-widest mb-1.5">
+                            <label
+                              htmlFor="goal-name-input"
+                              className="block text-[10px] font-bold uppercase text-slate-400 dark:text-white/40 tracking-widest mb-1.5"
+                            >
                               Goal Name
                             </label>
                             <input
+                              id="goal-name-input"
                               type="text"
                               value={inputs.goalName}
                               onChange={(e) => handleInputChange("goalName", e.target.value)}
+                              aria-label="Goal name input"
+                              aria-describedby={validationErrors.goalName ? "goal-name-error" : undefined}
                               className="w-full px-4 py-2.5 bg-slate-50 dark:bg-black/40 border border-slate-200 dark:border-white/10 rounded focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 text-sm outline-none transition text-slate-900 dark:text-[#f5f5f5]"
                             />
+                            {validationErrors.goalName && (
+                              <p id="goal-name-error" className="text-xs text-red-500 mt-1" role="alert">
+                                {validationErrors.goalName}
+                              </p>
+                            )}
                           </div>
 
                           <div>
-                            <label className="block text-[10px] font-bold uppercase text-slate-400 dark:text-white/40 tracking-widest mb-1.5">
+                            <label
+                              htmlFor="investment-input"
+                              className="block text-[10px] font-bold uppercase text-slate-400 dark:text-white/40 tracking-widest mb-1.5"
+                            >
                               Initial Investment Sum
                             </label>
                             <input
+                              id="investment-input"
                               type="number"
                               value={inputs.investment}
                               onChange={(e) => handleInputChange("investment", parseFloat(e.target.value) || 0)}
+                              aria-label="Initial investment amount"
+                              aria-describedby={validationErrors.investment ? "investment-error" : undefined}
                               className="w-full px-4 py-2.5 bg-slate-50 dark:bg-black/40 border border-slate-200 dark:border-white/10 rounded focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 text-sm outline-none transition text-slate-900 dark:text-[#f5f5f5]"
                             />
+                            {validationErrors.investment && (
+                              <p id="investment-error" className="text-xs text-red-500 mt-1" role="alert">
+                                {validationErrors.investment}
+                              </p>
+                            )}
                           </div>
 
                           <div>
-                            <label className="block text-[10px] font-bold uppercase text-slate-400 dark:text-white/40 tracking-widest mb-1.5">
+                            <label
+                              htmlFor="monthly-contribution-input"
+                              className="block text-[10px] font-bold uppercase text-slate-400 dark:text-white/40 tracking-widest mb-1.5"
+                            >
                               Monthly Contribution (SIP)
                             </label>
                             <input
+                              id="monthly-contribution-input"
                               type="number"
                               value={inputs.monthlyContribution}
                               onChange={(e) => handleInputChange("monthlyContribution", parseFloat(e.target.value) || 0)}
+                              aria-label="Monthly contribution amount"
+                              aria-describedby={validationErrors.monthlyContribution ? "contribution-error" : undefined}
                               className="w-full px-4 py-2.5 bg-slate-50 dark:bg-black/40 border border-slate-200 dark:border-white/10 rounded focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 text-sm outline-none transition text-slate-900 dark:text-[#f5f5f5]"
                             />
+                            {validationErrors.monthlyContribution && (
+                              <p id="contribution-error" className="text-xs text-red-500 mt-1" role="alert">
+                                {validationErrors.monthlyContribution}
+                              </p>
+                            )}
                           </div>
 
                           <div>
-                            <label className="block text-[10px] font-bold uppercase text-slate-400 dark:text-white/40 tracking-widest mb-1.5">
+                            <label
+                              htmlFor="target-amount-input"
+                              className="block text-[10px] font-bold uppercase text-slate-400 dark:text-white/40 tracking-widest mb-1.5"
+                            >
                               Target Wealth Limit
                             </label>
                             <input
+                              id="target-amount-input"
                               type="number"
                               value={inputs.targetAmount}
                               onChange={(e) => handleInputChange("targetAmount", parseFloat(e.target.value) || 0)}
+                              aria-label="Target wealth amount"
+                              aria-describedby={validationErrors.targetAmount ? "target-error" : undefined}
                               className="w-full px-4 py-2.5 bg-slate-50 dark:bg-black/40 border border-slate-200 dark:border-white/10 rounded focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 text-sm outline-none transition text-slate-900 dark:text-[#f5f5f5]"
                             />
+                            {validationErrors.targetAmount && (
+                              <p id="target-error" className="text-xs text-red-500 mt-1" role="alert">
+                                {validationErrors.targetAmount}
+                              </p>
+                            )}
                           </div>
 
                           <div className="grid grid-cols-2 gap-4">
